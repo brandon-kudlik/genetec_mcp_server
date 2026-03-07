@@ -115,6 +115,36 @@ class GenetecConnection:
             login_manager.LoggedOn -= on_logged_on
             login_manager.LogonFailed -= on_failed
 
+    def get_system_version(self) -> str:
+        """Get the Security Center version from the directory server.
+
+        Returns:
+            Version string (e.g. '5.13.3132.18').
+
+        Raises:
+            RuntimeError: If not connected or no server entity found.
+        """
+        if not self.is_connected:
+            raise RuntimeError("Not connected to Security Center.")
+
+        from Genetec.Sdk import EntityType, ReportType  # type: ignore[import-untyped]
+
+        query = self._engine.ReportManager.CreateReportQuery(
+            ReportType.EntityConfiguration
+        )
+        query.EntityTypeFilter.Add(EntityType.Server)
+        results = query.Query()
+
+        import System  # type: ignore[import-untyped]
+
+        for row in results.Data.Rows:
+            guid = System.Guid(str(row["Guid"]))
+            server = self._engine.GetEntity(guid)
+            if server is not None:
+                return str(server.Version)
+
+        raise RuntimeError("No server entity found in Security Center.")
+
     def disconnect(self) -> None:
         """Disconnect from Security Center."""
         if self.is_connected:

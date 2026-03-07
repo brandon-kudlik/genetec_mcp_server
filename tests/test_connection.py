@@ -69,3 +69,21 @@ class TestGenetecConnection:
         # The RequestDirectoryCertificateValidation handler should be registered
         assert conn.engine.LoginManager is not None
         conn.dispose()
+
+
+class TestGetSystemVersion:
+    """Tests for retrieving Security Center system version (requires live server)."""
+
+    def test_get_system_version_returns_version_string(self):
+        """get_system_version should return the SC version (e.g. '5.13.x.x')."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        result = conn.connect()
+        assert result == "Success", f"Connection failed: {conn.last_failure}"
+        try:
+            version = conn.get_system_version()
+            assert isinstance(version, str)
+            assert version.startswith("5.13"), f"Unexpected version: {version}"
+        finally:
+            conn.dispose()

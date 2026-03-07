@@ -1,0 +1,23 @@
+[project]
+name = "genetec-mcp-server"
+version = "0.1.0"
+description = "MCP server for Genetec Security Center 5.13 SDK"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "clr-loader>=0.2.10",
+    "python-dotenv>=1.2.2",
+    "pythonnet>=3.0.5",
+]
+
+[project.scripts]
+genetec-mcp-server = "genetec_mcp_server:main"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

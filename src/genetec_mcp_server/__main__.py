@@ -1,21 +1,11 @@
 """Entry point for the Genetec MCP Server."""
 
-import sys
-
-from genetec_mcp_server.sdk_loader import get_sdk_version, load_sdk
+from genetec_mcp_server.server import mcp
 
 
 def main() -> None:
-    """Initialize and verify SDK connectivity."""
-    print("Genetec MCP Server - Initializing...")
-
-    try:
-        load_sdk()
-        version = get_sdk_version()
-        print(f"Genetec SDK loaded successfully. Version: {version}")
-    except Exception as e:
-        print(f"ERROR: Failed to load Genetec SDK: {e}", file=sys.stderr)
-        sys.exit(1)
+    """Run the MCP server with streamable HTTP transport."""
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

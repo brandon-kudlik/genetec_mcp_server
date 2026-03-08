@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "clr-loader>=0.2.10",
+    "mcp>=1.0.0",
     "python-dotenv>=1.2.2",
     "pythonnet>=3.0.5",
 ]
@@ -20,4 +21,5 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.23",
 ]

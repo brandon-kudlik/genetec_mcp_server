@@ -58,6 +58,13 @@ Follow strict red/green TDD for all new features:
   - `System.Security.Cryptography.Xml` v6.0.1
   - `Microsoft.Extensions.ObjectPool` v5.0.10
 
+## SDK Query Patterns
+- Use `engine.ReportManager.CreateReportQuery(ReportType.X)` to create queries — do NOT instantiate query classes directly
+- Filter entities: `query.EntityTypeFilter.Add(EntityType.X)`, then `query.Query()` returns `results.Data.Rows`
+- Convert rows to entities: `System.Guid(str(row["Guid"]))` -> `engine.GetEntity(guid)`
+- `Server.Version` = full version (e.g. `5.13.3132.18`); `Engine.ProductVersion` = SDK version only (`5.13`)
+- SDK XML docs are incomplete — use runtime reflection to discover entity properties
+
 ## Environment Variables (.env)
 - `GENETEC_SDK_PATH` — path to SDK DLLs (default: `C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows`)
 - `GENETEC_CONFIG_PATH` — path for .gconfig files (default: `C:\ProgramData\Genetec Security Center 5.13`)

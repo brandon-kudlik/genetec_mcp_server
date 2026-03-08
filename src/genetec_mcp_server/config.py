@@ -23,6 +23,8 @@ CLIENT_CERTIFICATE = os.getenv(
     # Development certificate from Genetec DAP
     "KxsD11z743Hf5Gq9mv3+5ekxzemlCiUXkTFY5ba1NOGcLCmGstt2n0zYE9NsNimv",
 )
+HOST = os.getenv("GENETEC_MCP_HOST", "0.0.0.0")
+PORT = int(os.getenv("GENETEC_MCP_PORT", "8000"))
 
 
 def validate_sdk_path() -> Path:

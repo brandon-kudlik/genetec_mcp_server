@@ -4,8 +4,8 @@ from genetec_mcp_server.server import mcp
 
 
 def main() -> None:
-    """Run the MCP server with SSE transport."""
-    mcp.run(transport="sse")
+    """Run the MCP server with streamable HTTP transport."""
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Optional
 
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -49,4 +50,38 @@ async def get_system_version(ctx: Context) -> str:
     try:
         return connection.get_system_version()
     except RuntimeError as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def create_cardholder(
+    ctx: Context,
+    first_name: str,
+    last_name: str,
+    email: Optional[str] = None,
+    mobile_phone: Optional[str] = None,
+) -> str:
+    """Create a new cardholder in Genetec Security Center.
+
+    Args:
+        first_name: Cardholder's first name.
+        last_name: Cardholder's last name.
+        email: Email address (optional).
+        mobile_phone: Mobile phone number (optional).
+
+    Returns:
+        The GUID of the newly created cardholder, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        guid = connection.create_cardholder(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            mobile_phone=mobile_phone,
+        )
+        return f"Cardholder created: {first_name} {last_name} (GUID: {guid})"
+    except (RuntimeError, ValueError) as e:
         return f"Error: {e}"

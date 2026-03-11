@@ -145,6 +145,50 @@ class GenetecConnection:
 
         raise RuntimeError("No server entity found in Security Center.")
 
+    def create_cardholder(
+        self,
+        first_name: str,
+        last_name: str,
+        email: Optional[str] = None,
+        mobile_phone: Optional[str] = None,
+    ) -> str:
+        """Create a new cardholder entity in Security Center.
+
+        Args:
+            first_name: Cardholder's first name (required).
+            last_name: Cardholder's last name (required).
+            email: Email address (optional).
+            mobile_phone: Mobile phone number (optional).
+
+        Returns:
+            The GUID string of the newly created cardholder.
+
+        Raises:
+            RuntimeError: If not connected to Security Center.
+            ValueError: If first_name or last_name is empty.
+        """
+        if not first_name:
+            raise ValueError("first_name is required and cannot be empty.")
+        if not last_name:
+            raise ValueError("last_name is required and cannot be empty.")
+        if not self.is_connected:
+            raise RuntimeError("Not connected to Security Center.")
+
+        from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
+
+        entity_name = f"{first_name} {last_name}"
+        cardholder = self._engine.CreateEntity(entity_name, EntityType.Cardholder)
+
+        cardholder.FirstName = first_name
+        cardholder.LastName = last_name
+
+        if email:
+            cardholder.EmailAddress = email
+        if mobile_phone:
+            cardholder.MobilePhoneNumber = mobile_phone
+
+        return str(cardholder.Guid)
+
     def disconnect(self) -> None:
         """Disconnect from Security Center."""
         if self.is_connected:

@@ -57,6 +57,78 @@ class TestGetSystemVersionTool:
         assert "not connected" in result.lower()
 
 
+class TestCreateCardholderToolRegistration:
+    """Tests for the create_cardholder MCP tool."""
+
+    def test_create_cardholder_tool_is_registered(self):
+        """create_cardholder should be registered as an MCP tool."""
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "create_cardholder" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        """Tool should return error message when not connected."""
+        from genetec_mcp_server.server import create_cardholder
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_cardholder(mock_ctx, first_name="John", last_name="Doe")
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_guid_on_success(self):
+        """Tool should return the new cardholder's GUID on success."""
+        from genetec_mcp_server.server import create_cardholder
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_cardholder.return_value = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_cardholder(mock_ctx, first_name="John", last_name="Doe")
+        assert "a1b2c3d4-e5f6-7890-abcd-ef1234567890" in result
+        mock_conn.create_cardholder.assert_called_once_with(
+            first_name="John",
+            last_name="Doe",
+            email=None,
+            mobile_phone=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_passes_optional_fields(self):
+        """Tool should forward optional email and phone to connection."""
+        from genetec_mcp_server.server import create_cardholder
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_cardholder.return_value = "guid-here"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        await create_cardholder(
+            mock_ctx,
+            first_name="Jane",
+            last_name="Smith",
+            email="jane@example.com",
+            mobile_phone="+15551234567",
+        )
+        mock_conn.create_cardholder.assert_called_once_with(
+            first_name="Jane",
+            last_name="Smith",
+            email="jane@example.com",
+            mobile_phone="+15551234567",
+        )
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

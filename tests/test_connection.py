@@ -1,5 +1,7 @@
 """Tests for Genetec Security Center connection management."""
 
+import pytest
+
 from genetec_mcp_server.sdk_loader import load_sdk
 
 
@@ -69,6 +71,34 @@ class TestGenetecConnection:
         # The RequestDirectoryCertificateValidation handler should be registered
         assert conn.engine.LoginManager is not None
         conn.dispose()
+
+
+class TestCreateCardholder:
+    """Tests for creating cardholder entities."""
+
+    def test_create_cardholder_raises_when_not_connected(self):
+        """create_cardholder should raise RuntimeError if not connected."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.create_cardholder(first_name="John", last_name="Doe")
+        finally:
+            conn.dispose()
+
+    def test_create_cardholder_requires_first_and_last_name(self):
+        """create_cardholder should raise ValueError if names are empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="first_name"):
+                conn.create_cardholder(first_name="", last_name="Doe")
+            with pytest.raises(ValueError, match="last_name"):
+                conn.create_cardholder(first_name="John", last_name="")
+        finally:
+            conn.dispose()
 
 
 class TestGetSystemVersion:

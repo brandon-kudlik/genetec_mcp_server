@@ -59,6 +59,38 @@ Follow strict red/green TDD for all new features:
   - `System.Security.Cryptography.Xml` v6.0.1
   - `Microsoft.Extensions.ObjectPool` v5.0.10
 
+## Genetec Platform SDK Reference
+**Wiki:** https://github.com/Genetec/DAP/wiki/platform-sdk-overview
+
+### SDK Assemblies
+| Assembly | Purpose |
+|----------|---------|
+| `Genetec.Sdk.dll` | **Core** — entity model, connection, events, queries, transactions |
+| `Genetec.Sdk.Plugin.dll` | Server-side custom role hosting |
+| `Genetec.Sdk.Workspace.dll` | Client UI extensions (Security Desk / Config Tool) |
+| `Genetec.Sdk.Media.dll` | Video/audio playback, frame decoding |
+| `Genetec.Sdk.Controls.dll` | Reusable WPF/WinForms controls |
+
+Only `Genetec.Sdk.dll` is required; the rest are optional.
+
+### Engine Class (Central Entry Point)
+All SDK operations flow through the `Engine` class — connection management, entity retrieval, event subscriptions, and query execution via `ReportManager`.
+
+### Core SDK Concepts
+- **Entities** — cameras, doors, cardholders, 60+ types with inheritance
+- **Caching** — local entity data cache with sync
+- **Transactions** — batch operations for performance/consistency
+- **Events** — real-time system event subscriptions
+- **Actions** — command transmission to Security Center
+- **Reporting** — historical data retrieval and entity queries
+- **Logging** — diagnostic configuration
+
+### Deployment Requirements
+- SDK installation on host machine
+- `.cert` certificate file in adjacent `Certificates/` folder
+- Valid Security Center license with certificate part number
+- SDK version must be within 3 major versions of server
+
 ## SDK Query Patterns
 - Use `engine.ReportManager.CreateReportQuery(ReportType.X)` to create queries — do NOT instantiate query classes directly
 - Filter entities: `query.EntityTypeFilter.Add(EntityType.X)`, then `query.Query()` returns `results.Data.Rows`

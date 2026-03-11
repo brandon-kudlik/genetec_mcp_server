@@ -189,6 +189,58 @@ class GenetecConnection:
 
         return str(cardholder.Guid)
 
+    def add_cloudlink_unit(
+        self,
+        name: str,
+        ip_address: str,
+        username: str,
+        password: str,
+        access_manager_guid: str,
+    ) -> str:
+        """Enroll a Synergis Cloudlink unit into an Access Manager role.
+
+        Args:
+            name: Display name for the unit.
+            ip_address: IP address or hostname of the Cloudlink device.
+            username: Admin username for the Cloudlink unit.
+            password: Admin password for the Cloudlink unit.
+            access_manager_guid: GUID of the Access Manager role to assign to.
+
+        Returns:
+            The GUID string of the newly created unit entity.
+
+        Raises:
+            RuntimeError: If not connected to Security Center.
+            ValueError: If any required parameter is empty.
+        """
+        if not name:
+            raise ValueError("name is required and cannot be empty.")
+        if not ip_address:
+            raise ValueError("ip_address is required and cannot be empty.")
+        if not access_manager_guid:
+            raise ValueError("access_manager_guid is required and cannot be empty.")
+        if not self.is_connected:
+            raise RuntimeError("Not connected to Security Center.")
+
+        from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
+
+        import System  # type: ignore[import-untyped]
+
+        # Create the unit entity
+        unit = self._engine.CreateEntity(name, EntityType.Unit)
+        unit.IPAddress = ip_address
+        unit.UnitExtensionType = "CloudLink"
+
+        # Set credentials for the unit
+        unit.SetCredentials(username, password)
+
+        # Assign the unit to the Access Manager role
+        role_guid = System.Guid(access_manager_guid)
+        unit_guid = unit.Guid
+        self._engine.ActionManager.MoveAccessControlUnit(unit_guid, role_guid)
+
+        return str(unit_guid)
+
     def disconnect(self) -> None:
         """Disconnect from Security Center."""
         if self.is_connected:

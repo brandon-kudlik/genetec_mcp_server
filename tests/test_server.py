@@ -129,6 +129,90 @@ class TestCreateCardholderToolRegistration:
         )
 
 
+class TestAddCloudlinkUnitTool:
+    """Tests for the add_cloudlink_unit MCP tool."""
+
+    def test_add_cloudlink_unit_tool_is_registered(self):
+        """add_cloudlink_unit should be registered as an MCP tool."""
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "add_cloudlink_unit" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        """Tool should return error message when not connected."""
+        from genetec_mcp_server.server import add_cloudlink_unit
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_cloudlink_unit(
+            mock_ctx,
+            name="Cloudlink-01",
+            ip_address="192.168.1.100",
+            username="admin",
+            password="admin",
+            access_manager_guid="00000000-0000-0000-0000-000000000001",
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_guid_on_success(self):
+        """Tool should return the new unit's GUID on success."""
+        from genetec_mcp_server.server import add_cloudlink_unit
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_cloudlink_unit.return_value = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_cloudlink_unit(
+            mock_ctx,
+            name="Cloudlink-01",
+            ip_address="192.168.1.100",
+            username="admin",
+            password="admin",
+            access_manager_guid="00000000-0000-0000-0000-000000000001",
+        )
+        assert "a1b2c3d4-e5f6-7890-abcd-ef1234567890" in result
+        mock_conn.add_cloudlink_unit.assert_called_once_with(
+            name="Cloudlink-01",
+            ip_address="192.168.1.100",
+            username="admin",
+            password="admin",
+            access_manager_guid="00000000-0000-0000-0000-000000000001",
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        """Tool should return error message on RuntimeError."""
+        from genetec_mcp_server.server import add_cloudlink_unit
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_cloudlink_unit.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_cloudlink_unit(
+            mock_ctx,
+            name="Cloudlink-01",
+            ip_address="192.168.1.100",
+            username="admin",
+            password="admin",
+            access_manager_guid="00000000-0000-0000-0000-000000000001",
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

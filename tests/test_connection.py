@@ -101,6 +101,78 @@ class TestCreateCardholder:
             conn.dispose()
 
 
+class TestAddCloudlinkUnit:
+    """Tests for adding Cloudlink units to an Access Manager role."""
+
+    def test_add_cloudlink_unit_raises_when_not_connected(self):
+        """add_cloudlink_unit should raise RuntimeError if not connected."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.add_cloudlink_unit(
+                    name="Cloudlink-01",
+                    ip_address="192.168.1.100",
+                    username="admin",
+                    password="admin",
+                    access_manager_guid="00000000-0000-0000-0000-000000000001",
+                )
+        finally:
+            conn.dispose()
+
+    def test_add_cloudlink_unit_requires_name(self):
+        """add_cloudlink_unit should raise ValueError if name is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="name"):
+                conn.add_cloudlink_unit(
+                    name="",
+                    ip_address="192.168.1.100",
+                    username="admin",
+                    password="admin",
+                    access_manager_guid="00000000-0000-0000-0000-000000000001",
+                )
+        finally:
+            conn.dispose()
+
+    def test_add_cloudlink_unit_requires_ip_address(self):
+        """add_cloudlink_unit should raise ValueError if ip_address is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="ip_address"):
+                conn.add_cloudlink_unit(
+                    name="Cloudlink-01",
+                    ip_address="",
+                    username="admin",
+                    password="admin",
+                    access_manager_guid="00000000-0000-0000-0000-000000000001",
+                )
+        finally:
+            conn.dispose()
+
+    def test_add_cloudlink_unit_requires_access_manager_guid(self):
+        """add_cloudlink_unit should raise ValueError if access_manager_guid is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="access_manager_guid"):
+                conn.add_cloudlink_unit(
+                    name="Cloudlink-01",
+                    ip_address="192.168.1.100",
+                    username="admin",
+                    password="admin",
+                    access_manager_guid="",
+                )
+        finally:
+            conn.dispose()
+
+
 class TestGetSystemVersion:
     """Tests for retrieving Security Center system version (requires live server)."""
 

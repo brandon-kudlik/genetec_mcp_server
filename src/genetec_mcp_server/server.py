@@ -85,3 +85,40 @@ async def create_cardholder(
         return f"Cardholder created: {first_name} {last_name} (GUID: {guid})"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def add_cloudlink_unit(
+    ctx: Context,
+    name: str,
+    ip_address: str,
+    username: str,
+    password: str,
+    access_manager_guid: str,
+) -> str:
+    """Enroll a Synergis Cloudlink access control unit into a Security Center Access Manager role.
+
+    Args:
+        name: Display name for the unit.
+        ip_address: IP address or hostname of the Cloudlink device.
+        username: Admin username for the Cloudlink unit.
+        password: Admin password for the Cloudlink unit.
+        access_manager_guid: GUID of the Access Manager role to assign the unit to.
+
+    Returns:
+        The GUID of the newly created unit, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        guid = connection.add_cloudlink_unit(
+            name=name,
+            ip_address=ip_address,
+            username=username,
+            password=password,
+            access_manager_guid=access_manager_guid,
+        )
+        return f"Cloudlink unit enrolled: {name} at {ip_address} (GUID: {guid})"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"

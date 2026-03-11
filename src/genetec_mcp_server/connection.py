@@ -223,14 +223,30 @@ class GenetecConnection:
             raise RuntimeError("Not connected to Security Center.")
 
         from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
-        from Genetec.Sdk.AccessControl import UnitExtensionType  # type: ignore[import-untyped]
 
         import System  # type: ignore[import-untyped]
+
+        # Find UnitExtensionType enum via reflection — namespace varies by SDK version
+        unit_ext_type_cls = None
+        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
+            for t in asm.GetTypes():
+                if t.Name == "UnitExtensionType" and t.IsEnum:
+                    unit_ext_type_cls = t
+                    break
+            if unit_ext_type_cls is not None:
+                break
+
+        if unit_ext_type_cls is None:
+            raise RuntimeError(
+                "Could not find UnitExtensionType enum in loaded SDK assemblies."
+            )
+
+        cloudlink_value = System.Enum.Parse(unit_ext_type_cls, "CloudLink")
 
         # Create the unit entity
         unit = self._engine.CreateEntity(name, EntityType.Unit)
         unit.IPAddress = ip_address
-        unit.UnitExtensionType = UnitExtensionType.CloudLink
+        unit.UnitExtensionType = cloudlink_value
 
         # Set credentials for the unit
         unit.SetCredentials(username, password)

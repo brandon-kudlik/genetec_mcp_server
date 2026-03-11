@@ -226,28 +226,29 @@ class GenetecConnection:
         from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
         from System.Security import SecureString  # type: ignore[import-untyped]
 
-        # Resolve SDK types via reflection — namespaces vary by SDK version
-        def _find_type(type_name: str) -> type:
+        # Resolve SDK types via reflection then import by discovered namespace
+        def _import_type(type_name: str):
             for asm in System.AppDomain.CurrentDomain.GetAssemblies():
                 for t in asm.GetTypes():
                     if t.Name == type_name:
-                        return t
+                        namespace = t.Namespace
+                        module = __import__(namespace, fromlist=[type_name])
+                        return getattr(module, type_name)
             raise RuntimeError(
                 f"Could not find {type_name} in loaded SDK assemblies."
             )
 
-        ext_type_cls = _find_type("AccessControlExtensionType")
-        info_cls = _find_type("AddAccessControlUnitInfo")
-        cloudlink_value = System.Enum.Parse(ext_type_cls, "CloudLink")
+        AccessControlExtensionType = _import_type("AccessControlExtensionType")
+        AddAccessControlUnitInfo = _import_type("AddAccessControlUnitInfo")
 
         # Build SecureString for the password
         secure_password = SecureString()
         for ch in password:
             secure_password.AppendChar(ch)
 
-        info = info_cls(
+        info = AddAccessControlUnitInfo(
             address=NetIPAddress.Parse(ip_address),
-            extensionType=cloudlink_value,
+            extensionType=AccessControlExtensionType.CloudLink,
             port=80,
             username=username,
             password=secure_password,

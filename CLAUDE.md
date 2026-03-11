@@ -52,6 +52,7 @@ Follow strict red/green TDD for all new features:
 - `.cert` file must be placed at `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` (SDK resolves path via `SdkCertificateHelpers.GetCertificatePath(Engine.GetType(), False)`)
 - **Missing NuGet dependencies:** The SDK ships without several required NuGet packages that must be manually placed in the SDK directory:
   - `Microsoft.Extensions.Caching.Memory` v2.1.23 (CRITICAL — without this, SecurityTokenHelper initialization fails silently, causing generic `Failed` login errors)
+  - `Microsoft.Extensions.Caching.Abstractions` v2.1.2 (CRITICAL — transitive dependency of Caching.Memory; must also be present or Caching.Memory fails to load)
   - `BouncyCastle.Cryptography` v2.4.0
   - `System.ServiceModel.Primitives/Http/NetTcp/Security/Duplex` v4.10.3 + `System.Private.ServiceModel`
   - `System.Security.Cryptography.Pkcs` v8.0.0 + `System.Formats.Asn1` v8.0.0
@@ -72,3 +73,41 @@ Follow strict red/green TDD for all new features:
 - `GENETEC_USERNAME` — login username (empty = Windows auth)
 - `GENETEC_PASSWORD` — login password
 - `GENETEC_CLIENT_CERTIFICATE` — SDK ApplicationId string (default: DAP development cert)
+
+## AWS Deployment Notes (WIN-SERVER-02)
+- Production deployment uses NSSM Windows service (`GenetecMCPServer`) running `uv run genetec-mcp-server`
+- Service runs behind an ALB with TLS termination at `mcp.acmepavingcorp.com`
+- NSSM service account: if `uv` is installed per-user, service must run as `.\Administrator` (not `LocalSystem`)
+- ALB idle timeout must be set to 600s (default 60s breaks SSE connections)
+- ALB health check: `GET /mcp` returns 406 (expected); success codes configured as `200-406`
+- The `.env` file on WIN-SERVER-02 uses `GENETEC_SERVER=172.31.25.170` (WIN-SERVER-01 private IP)
+- **SDK certificate must exist in TWO locations:** the repo's `Certificates/python.exe.cert` AND `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` — the SDK resolves the latter path internally
+- **All NuGet dependencies (see list above) must be manually placed in the SDK directory on every machine** — they are not included in the SDK installer and are not part of the git repo. This is the most common cause of silent `Failed` login errors on fresh deployments.
+
+## Diagnosing Connection Failures
+The `app_lifespan` in `server.py` calls `conn.connect()` but does not log the result — the server starts normally even if the SDK connection fails. To diagnose:
+```powershell
+uv run python -c "
+from genetec_mcp_server.connection import GenetecConnection
+conn = GenetecConnection()
+result = conn.connect()
+print(f'Connect result: {result}')
+print(f'Is connected: {conn.is_connected}')
+print(f'Last failure: {conn.last_failure}')
+conn.dispose()
+"
+```
+- `Success` = working. `Timeout` = network issue. `Failed` with no detail = missing NuGet DLL or certificate.
+- A generic `Failed` code that occurs regardless of correct/wrong credentials means the failure is pre-authentication (certificate or DLL issue, not credentials).
+- Verify all required DLLs are present:
+```powershell
+$sdkPath = "C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows"
+@("Microsoft.Extensions.Caching.Memory.dll","Microsoft.Extensions.Caching.Abstractions.dll","Microsoft.Extensions.Options.dll","BouncyCastle.Cryptography.dll","System.ServiceModel.Primitives.dll","System.Private.ServiceModel.dll","System.Security.Cryptography.Pkcs.dll","System.Formats.Asn1.dll","System.Security.Cryptography.Xml.dll","Microsoft.Extensions.ObjectPool.dll") | ForEach-Object { Write-Host "$_ : $(Test-Path (Join-Path $sdkPath $_))" }
+```
+- Missing DLLs can be downloaded directly from NuGet without the .NET SDK:
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/<PackageName>/<Version>" -OutFile "C:\Temp\pkg.zip" -UseBasicParsing
+Expand-Archive -Path "C:\Temp\pkg.zip" -DestinationPath "C:\Temp\pkg" -Force
+Copy-Item "C:\Temp\pkg\lib\netstandard2.0\<PackageName>.dll" $sdkPath -Force
+```

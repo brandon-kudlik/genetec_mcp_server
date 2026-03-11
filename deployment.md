@@ -220,11 +220,14 @@ The following security measures should be applied to both instances. Full implem
 | Configure CloudTrail & billing alarm | [ ] (account-level) | N/A |
 | Configure EBS Snapshot schedule | [ ] | [ ] |
 | Install .NET 8 Runtime | N/A | [ ] |
+| Install NuGet dependencies in SDK directory (Step 1d) | N/A | [ ] |
+| Place SDK certificate in SDK directory (Step 1e) | N/A | [ ] |
 | Install Python / uv | N/A | [ ] |
 | Clone genetec_mcp_server repo | N/A | [ ] |
 | Configure .env file | N/A | [ ] |
 | uv sync dependencies | N/A | [ ] |
 | Test server manually | N/A | [ ] |
+| Verify SDK connection to Security Center (Step 6a) | N/A | [ ] |
 | Install NSSM service | N/A | [ ] |
 | Configure Windows Firewall port 8000 | N/A | [ ] |
 | Register domain in Route 53 | N/A | [ ] (one-time) |
@@ -283,6 +286,106 @@ This section deploys [brandon-kudlik/genetec_mcp_server](https://github.com/bran
 2. Run the SDK installer
 3. The SDK installs `Genetec.Sdk.dll` and supporting .NET assemblies
 4. Default SDK path: `C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows`
+
+#### 1d. Install Missing NuGet Dependencies in the SDK Directory
+
+The Genetec SDK 5.13 ships without several required NuGet packages. Without these DLLs, the SDK's `SecurityTokenHelper` static constructor fails silently, causing every login attempt to return a generic `Failed` error code regardless of whether credentials are correct. This is the most common cause of connection failures on fresh deployments.
+
+> **WARNING:** This step is mandatory. The SDK installer does not include these DLLs, and they are not part of the git repository. Every new machine that runs the MCP server must have these DLLs manually placed in the SDK directory.
+
+Since WIN-SERVER-02 only has the .NET 8 runtime (not the SDK), download each package directly from NuGet.org:
+
+```powershell
+$sdkPath = "C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+New-Item -ItemType Directory -Path C:\Temp\nuget -Force
+
+# Define all required packages: Name, Version, TFM subfolder
+$packages = @(
+    @("Microsoft.Extensions.Caching.Memory", "2.1.23", "netstandard2.0"),
+    @("Microsoft.Extensions.Caching.Abstractions", "2.1.2", "netstandard2.0"),
+    @("Microsoft.Extensions.Options", "2.1.1", "netstandard2.0"),
+    @("BouncyCastle.Cryptography", "2.4.0", "net6.0"),
+    @("System.ServiceModel.Primitives", "4.10.3", "net6.0"),
+    @("System.ServiceModel.Http", "4.10.3", "net6.0"),
+    @("System.ServiceModel.NetTcp", "4.10.3", "net6.0"),
+    @("System.ServiceModel.Security", "4.10.3", "net6.0"),
+    @("System.ServiceModel.Duplex", "4.10.3", "net6.0"),
+    @("System.Private.ServiceModel", "4.10.3", "net6.0"),
+    @("System.Security.Cryptography.Pkcs", "8.0.0", "net8.0"),
+    @("System.Formats.Asn1", "8.0.0", "net8.0"),
+    @("System.Security.Cryptography.Xml", "6.0.1", "net6.0"),
+    @("Microsoft.Extensions.ObjectPool", "5.0.10", "net5.0")
+)
+
+foreach ($pkg in $packages) {
+    $name = $pkg[0]; $version = $pkg[1]; $tfm = $pkg[2]
+    $zipPath = "C:\Temp\nuget\$name.zip"
+    $extractPath = "C:\Temp\nuget\$name"
+    $dllPath = "$extractPath\lib\$tfm\$name.dll"
+    $destPath = Join-Path $sdkPath "$name.dll"
+
+    if (Test-Path $destPath) {
+        Write-Host "SKIP $name (already exists)"
+        continue
+    }
+
+    Write-Host "Downloading $name v$version..."
+    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$name/$version" `
+        -OutFile $zipPath -UseBasicParsing
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+    if (Test-Path $dllPath) {
+        Copy-Item $dllPath $destPath -Force
+        Write-Host "OK $name"
+    } else {
+        Write-Host "WARNING: $dllPath not found — check TFM subfolder manually"
+    }
+}
+```
+
+**Verify all DLLs are present:**
+
+```powershell
+$sdkPath = "C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows"
+@(
+    "Microsoft.Extensions.Caching.Memory.dll",
+    "Microsoft.Extensions.Caching.Abstractions.dll",
+    "Microsoft.Extensions.Options.dll",
+    "BouncyCastle.Cryptography.dll",
+    "System.ServiceModel.Primitives.dll",
+    "System.Private.ServiceModel.dll",
+    "System.Security.Cryptography.Pkcs.dll",
+    "System.Formats.Asn1.dll",
+    "System.Security.Cryptography.Xml.dll",
+    "Microsoft.Extensions.ObjectPool.dll"
+) | ForEach-Object {
+    $exists = Test-Path (Join-Path $sdkPath $_)
+    Write-Host "$_ : $exists"
+}
+```
+
+All entries must show `True`. If any show `False`, the SDK connection will fail silently.
+
+#### 1e. Place the SDK Certificate in the SDK Directory
+
+The SDK resolves its certificate from `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` at runtime (via `SdkCertificateHelpers.GetCertificatePath()`). The repo ships a development certificate at `Certificates/python.exe.cert`, but it must also be copied to the SDK's expected location.
+
+> **NOTE:** This step must be done after cloning the repository (Step 4b). If performing these steps in order, return to this step after cloning.
+
+```powershell
+$sdkPath = "C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows"
+$certDir = Join-Path $sdkPath "certificates"
+
+New-Item -ItemType Directory -Path $certDir -Force
+Copy-Item "C:\mcp\genetec_mcp_server\Certificates\python.exe.cert" `
+    (Join-Path $certDir "Genetec.Sdk.Engine.cert") -Force
+
+# Verify
+Get-Content (Join-Path $certDir "Genetec.Sdk.Engine.cert")
+```
+
+You should see the XML certificate with the DAP development `ApplicationId`.
 
 ---
 
@@ -437,6 +540,49 @@ Get-Item .venv
 ### 8.7 Step 6: Test the Server Manually
 
 Always test interactively before installing as a service — errors appear directly in the console.
+
+#### 6a. Verify SDK Connection to Security Center
+
+Before starting the MCP server, verify the SDK can connect to Security Center. This isolates SDK/credential/certificate issues from MCP transport issues.
+
+```powershell
+Set-Location C:\mcp\genetec_mcp_server
+uv run python -c "
+from genetec_mcp_server.connection import GenetecConnection
+conn = GenetecConnection()
+result = conn.connect()
+print(f'Connect result: {result}')
+print(f'Is connected: {conn.is_connected}')
+print(f'Last failure: {conn.last_failure}')
+if conn.is_connected:
+    version = conn.get_system_version()
+    print(f'Version: {version}')
+conn.dispose()
+"
+```
+
+**Expected output:**
+```
+Connect result: Success
+Is connected: True
+Last failure: None
+Version: 5.13.3132.18
+```
+
+**If you see `Connect result: Failed`:**
+- A generic `Failed` code that occurs regardless of correct/wrong credentials means the failure is **pre-authentication** — caused by a missing NuGet DLL or certificate, not credentials
+- Verify all NuGet DLLs are present (Step 1d verification script)
+- Verify the SDK certificate exists at `<SDK_PATH>\certificates\Genetec.Sdk.Engine.cert` (Step 1e)
+- Test network connectivity: `Test-NetConnection -ComputerName 172.31.25.170 -Port 4502`
+
+**If you see `Connect result: Timeout`:**
+- The Directory server is unreachable — check network, Security Group, and Windows Firewall
+
+> **WARNING:** The MCP server's `app_lifespan` does not log or check the return value of `conn.connect()`. The server will start and appear healthy even if the SDK connection fails. Always run this verification step on a new deployment before proceeding.
+
+Do not proceed to 6b until this step returns `Success`.
+
+#### 6b. Start the server interactively
 
 **Window 1 — Start the server:**
 ```powershell
@@ -791,6 +937,10 @@ Get-Content .\logs\stdout.log -Tail 30
 | Connection drops after ~5 min | ALB idle timeout at default 60s | Confirm ALB idle timeout is set to 600s (Step 10e) |
 | uv command not found in service | uv installed per-user; LocalSystem can't see it | Set service to run as Administrator: `nssm set GenetecMCPServer ObjectName .\Administrator` |
 | Certificate errors on Genetec connection | Certificates folder empty | Place correct Genetec certificates in `C:\mcp\genetec_mcp_server\Certificates\` |
+| Generic `Failed` login — same error with correct and wrong credentials | Missing NuGet DLL in SDK directory (pre-auth failure) | Run Step 1d verification script; most commonly `Microsoft.Extensions.Caching.Abstractions.dll` is missing. Download from NuGet.org and place in SDK directory (see Step 1d) |
+| SDK cert file not found at runtime | `Genetec.Sdk.Engine.cert` missing from `<SDK_PATH>/certificates/` | Copy `Certificates/python.exe.cert` to `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` (see Step 1e) |
+| Server starts, ALB healthy, but tool calls return "Not connected to Security Center" | `conn.connect()` failed silently during startup | Run the SDK connection verification script (Step 6a) to see the actual failure code; the MCP server does not log connection failures |
+| ALB target shows `Target.Timeout` after reboot | NSSM service did not auto-start | Check `Get-Service GenetecMCPServer`; verify start type with `nssm get GenetecMCPServer Start`; check Windows Event Log: `Get-EventLog -LogName System -Source "Service Control Manager" -Newest 20` |
 | ASGI ClosedResourceError on POST | Race condition in MCP SDK stateful mode | Use MCP Inspector for testing: `npx @modelcontextprotocol/inspector http://localhost:8000/mcp` |
 | 406 on GET to /mcp | Expected — MCP endpoint requires POST + Accept header | Not an error; set ALB health check success codes to `200-406` |
 | curl INTERNAL_ERROR after 200 | curl closes SSE stream abruptly | Not an error; if you got 200 + Mcp-Session-Id the server is working |

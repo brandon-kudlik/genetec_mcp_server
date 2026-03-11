@@ -223,13 +223,14 @@ class GenetecConnection:
             raise RuntimeError("Not connected to Security Center.")
 
         from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
+        from Genetec.Sdk.AccessControl import UnitExtensionType  # type: ignore[import-untyped]
 
         import System  # type: ignore[import-untyped]
 
         # Create the unit entity
         unit = self._engine.CreateEntity(name, EntityType.Unit)
         unit.IPAddress = ip_address
-        unit.UnitExtensionType = "CloudLink"
+        unit.UnitExtensionType = UnitExtensionType.CloudLink
 
         # Set credentials for the unit
         unit.SetCredentials(username, password)

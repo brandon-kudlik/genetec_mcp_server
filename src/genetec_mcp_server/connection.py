@@ -222,23 +222,32 @@ class GenetecConnection:
         if not self.is_connected:
             raise RuntimeError("Not connected to Security Center.")
 
-        from Genetec.Sdk.Entities.AccessControl import (  # type: ignore[import-untyped]
-            AccessControlExtensionType,
-            AddAccessControlUnitInfo,
-        )
-
         import System  # type: ignore[import-untyped]
         from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
         from System.Security import SecureString  # type: ignore[import-untyped]
+
+        # Resolve SDK types via reflection — namespaces vary by SDK version
+        def _find_type(type_name: str) -> type:
+            for asm in System.AppDomain.CurrentDomain.GetAssemblies():
+                for t in asm.GetTypes():
+                    if t.Name == type_name:
+                        return t
+            raise RuntimeError(
+                f"Could not find {type_name} in loaded SDK assemblies."
+            )
+
+        ext_type_cls = _find_type("AccessControlExtensionType")
+        info_cls = _find_type("AddAccessControlUnitInfo")
+        cloudlink_value = System.Enum.Parse(ext_type_cls, "CloudLink")
 
         # Build SecureString for the password
         secure_password = SecureString()
         for ch in password:
             secure_password.AppendChar(ch)
 
-        info = AddAccessControlUnitInfo(
+        info = info_cls(
             address=NetIPAddress.Parse(ip_address),
-            extensionType=AccessControlExtensionType.CloudLink,
+            extensionType=cloudlink_value,
             port=80,
             username=username,
             password=secure_password,

@@ -222,41 +222,60 @@ class GenetecConnection:
         if not self.is_connected:
             raise RuntimeError("Not connected to Security Center.")
 
-        from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
+        from Genetec.Sdk.Entities.AccessControl import (  # type: ignore[import-untyped]
+            AccessControlExtensionType,
+            AddAccessControlUnitInfo,
+        )
 
         import System  # type: ignore[import-untyped]
+        from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
+        from System.Security import SecureString  # type: ignore[import-untyped]
 
-        # Find UnitExtensionType enum via reflection — namespace varies by SDK version
-        unit_ext_type_cls = None
-        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
-            for t in asm.GetTypes():
-                if t.Name == "UnitExtensionType" and t.IsEnum:
-                    unit_ext_type_cls = t
-                    break
-            if unit_ext_type_cls is not None:
-                break
+        # Build SecureString for the password
+        secure_password = SecureString()
+        for ch in password:
+            secure_password.AppendChar(ch)
 
-        if unit_ext_type_cls is None:
-            raise RuntimeError(
-                "Could not find UnitExtensionType enum in loaded SDK assemblies."
-            )
+        info = AddAccessControlUnitInfo(
+            address=NetIPAddress.Parse(ip_address),
+            extensionType=AccessControlExtensionType.CloudLink,
+            port=80,
+            username=username,
+            password=secure_password,
+        )
 
-        cloudlink_value = System.Enum.Parse(unit_ext_type_cls, "CloudLink")
-
-        # Create the unit entity
-        unit = self._engine.CreateEntity(name, EntityType.Unit)
-        unit.IPAddress = ip_address
-        unit.UnitExtensionType = cloudlink_value
-
-        # Set credentials for the unit
-        unit.SetCredentials(username, password)
-
-        # Assign the unit to the Access Manager role
         role_guid = System.Guid(access_manager_guid)
-        unit_guid = unit.Guid
-        self._engine.ActionManager.MoveAccessControlUnit(unit_guid, role_guid)
 
-        return str(unit_guid)
+        # Subscribe to enrollment events to capture result
+        done = threading.Event()
+        result_holder: list[str] = []
+        error_holder: list[str] = []
+
+        def on_success(sender, e):  # type: ignore[no-untyped-def]
+            result_holder.append("success")
+            done.set()
+
+        def on_failed(sender, e):  # type: ignore[no-untyped-def]
+            error_holder.append(str(e.ActionDetails))
+            done.set()
+
+        mgr = self._engine.AccessControlUnitManager
+        mgr.UnitEnrollmentSucceeded += on_success
+        mgr.UnitEnrollmentFailed += on_failed
+
+        try:
+            mgr.EnrollAccessControlUnit(info, role_guid)
+
+            if not done.wait(timeout=60.0):
+                raise RuntimeError("Unit enrollment timed out after 60 seconds.")
+
+            if error_holder:
+                raise RuntimeError(f"Unit enrollment failed: {error_holder[0]}")
+
+            return name
+        finally:
+            mgr.UnitEnrollmentSucceeded -= on_success
+            mgr.UnitEnrollmentFailed -= on_failed
 
     def disconnect(self) -> None:
         """Disconnect from Security Center."""

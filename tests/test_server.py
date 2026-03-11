@@ -167,7 +167,7 @@ class TestAddCloudlinkUnitTool:
 
         mock_conn = MagicMock()
         mock_conn.is_connected = True
-        mock_conn.add_cloudlink_unit.return_value = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        mock_conn.add_cloudlink_unit.return_value = "Cloudlink-01"
 
         mock_ctx = MagicMock()
         mock_ctx.request_context.lifespan_context.connection = mock_conn
@@ -180,7 +180,8 @@ class TestAddCloudlinkUnitTool:
             password="admin",
             access_manager_guid="00000000-0000-0000-0000-000000000001",
         )
-        assert "a1b2c3d4-e5f6-7890-abcd-ef1234567890" in result
+        assert "Cloudlink-01" in result
+        assert "enrolled successfully" in result.lower()
         mock_conn.add_cloudlink_unit.assert_called_once_with(
             name="Cloudlink-01",
             ip_address="192.168.1.100",

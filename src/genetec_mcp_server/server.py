@@ -112,13 +112,13 @@ async def add_cloudlink_unit(
     if not connection.is_connected:
         return "Error: Not connected to Security Center."
     try:
-        guid = connection.add_cloudlink_unit(
+        result = connection.add_cloudlink_unit(
             name=name,
             ip_address=ip_address,
             username=username,
             password=password,
             access_manager_guid=access_manager_guid,
         )
-        return f"Cloudlink unit enrolled: {name} at {ip_address} (GUID: {guid})"
+        return f"Cloudlink unit enrolled successfully: {result} at {ip_address}"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"

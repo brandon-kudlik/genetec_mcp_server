@@ -264,6 +264,177 @@ class TestDiscoverBuilderAPI:
             print("\n  AccessControlInterfaceType not found")
 
 
+class TestDebugBuilderExecution:
+    """Debug the actual builder execution to understand failures."""
+
+    def test_inspect_build_method(self, connected):
+        """Inspect Build() return type and any error-related methods on the builder."""
+        import System
+        import System.Reflection
+
+        builder_type = None
+        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
+            try:
+                for t in asm.GetTypes():
+                    if t.Name == "AccessControlInterfacePeripheralsBuilder":
+                        builder_type = t
+                        break
+            except Exception:
+                pass
+            if builder_type:
+                break
+
+        if not builder_type:
+            pytest.skip("AccessControlInterfacePeripheralsBuilder type not found")
+
+        all_flags = (System.Reflection.BindingFlags.Public
+                     | System.Reflection.BindingFlags.NonPublic
+                     | System.Reflection.BindingFlags.Instance
+                     | System.Reflection.BindingFlags.DeclaredOnly)
+
+        print(f"\n=== ALL methods on {builder_type.Name} ===")
+        for m in builder_type.GetMethods(all_flags):
+            params = ", ".join(f"{p.ParameterType.Name} {p.Name}" for p in m.GetParameters())
+            print(f"  {m.ReturnType.Name} {m.Name}({params})")
+
+        print(f"\n=== ALL properties on {builder_type.Name} ===")
+        for p in builder_type.GetProperties(all_flags):
+            print(f"  {p.PropertyType.Name} {p.Name}")
+
+    def test_inspect_mercury_class_properties(self, connected):
+        """Inspect all properties on a Mercury controller class."""
+        import System
+        import System.Reflection
+
+        MercuryLP1502 = connected._import_type("MercuryLP1502")
+        t = MercuryLP1502().GetType()
+
+        print(f"\n=== {t.FullName} Properties ===")
+        for p in t.GetProperties():
+            print(f"  {p.PropertyType.Name} {p.Name}")
+
+        print(f"\n=== {t.FullName} base type chain ===")
+        current = t
+        while current is not None:
+            print(f"  {current.FullName}")
+            current = current.BaseType
+
+    def test_try_build_and_capture_exception(self, connected):
+        """Attempt a real build with a known Cloudlink unit and capture any exception details."""
+        import System
+        from System.Net import IPAddress as NetIPAddress
+
+        # Query for existing units to find a Cloudlink
+        from Genetec.Sdk import EntityType, ReportType
+
+        query = connected.engine.ReportManager.CreateReportQuery(
+            ReportType.EntityConfiguration
+        )
+        query.EntityTypeFilter.Add(EntityType.Unit)
+        results = query.Query()
+
+        unit_guid = None
+        for row in results.Data.Rows:
+            guid = System.Guid(str(row["Guid"]))
+            entity = connected.engine.GetEntity(guid)
+            if entity is not None:
+                print(f"\n  Found unit: {entity.Name} ({entity.Guid})")
+                print(f"    Type: {entity.GetType().FullName}")
+                unit_guid = entity.Guid
+                break
+
+        if unit_guid is None:
+            pytest.skip("No units found to test with")
+
+        MercuryLP1502 = connected._import_type("MercuryLP1502")
+        AccessControlInterfacePeripheralsBuilder = connected._import_type(
+            "AccessControlInterfacePeripheralsBuilder"
+        )
+
+        mercury = MercuryLP1502()
+        mercury.IpAddress = NetIPAddress.Parse("192.168.1.50")
+        mercury.Port = 3001
+        mercury.Channel = 0
+
+        print(f"\n  Mercury object type: {mercury.GetType().FullName}")
+        print(f"  Mercury IpAddress: {mercury.IpAddress}")
+        print(f"  Mercury Port: {mercury.Port}")
+        print(f"  Mercury Channel: {mercury.Channel}")
+
+        builder = AccessControlInterfacePeripheralsBuilder(
+            connected.engine, unit_guid
+        )
+        print(f"\n  Builder type: {builder.GetType().FullName}")
+
+        # Check if builder has any status/error properties before build
+        for prop in builder.GetType().GetProperties():
+            try:
+                val = prop.GetValue(builder)
+                print(f"  Builder.{prop.Name} = {val}")
+            except Exception as ex:
+                print(f"  Builder.{prop.Name} = <error: {ex}>")
+
+        builder.AddAccessControlBusInterface("Test-Mercury-LP1502", mercury)
+
+        # Check state after add
+        print("\n  === After AddAccessControlBusInterface ===")
+        for prop in builder.GetType().GetProperties():
+            try:
+                val = prop.GetValue(builder)
+                print(f"  Builder.{prop.Name} = {val}")
+            except Exception as ex:
+                print(f"  Builder.{prop.Name} = <error: {ex}>")
+
+        try:
+            result = builder.Build()
+            print(f"\n  Build() returned: {result} (type: {type(result)})")
+            if result is not None:
+                print(f"  Result type: {result.GetType().FullName}")
+                for prop in result.GetType().GetProperties():
+                    try:
+                        val = prop.GetValue(result)
+                        print(f"  Result.{prop.Name} = {val}")
+                    except Exception as ex:
+                        print(f"  Result.{prop.Name} = <error: {ex}>")
+        except Exception as ex:
+            print(f"\n  Build() raised: {type(ex).__name__}: {ex}")
+            # Try to get inner exception details
+            if hasattr(ex, 'InnerException') and ex.InnerException:
+                print(f"  InnerException: {ex.InnerException}")
+
+    def test_inspect_add_bus_interface_overloads(self, connected):
+        """Check all overloads of AddAccessControlBusInterface."""
+        import System
+        import System.Reflection
+
+        builder_type = None
+        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
+            try:
+                for t in asm.GetTypes():
+                    if t.Name == "AccessControlInterfacePeripheralsBuilder":
+                        builder_type = t
+                        break
+            except Exception:
+                pass
+            if builder_type:
+                break
+
+        if not builder_type:
+            pytest.skip("Builder type not found")
+
+        all_flags = (System.Reflection.BindingFlags.Public
+                     | System.Reflection.BindingFlags.NonPublic
+                     | System.Reflection.BindingFlags.Instance)
+
+        print("\n=== AddAccessControlBusInterface overloads ===")
+        for m in builder_type.GetMethods(all_flags):
+            if "AddAccessControl" in m.Name or "Add" in m.Name:
+                params = ", ".join(
+                    f"{p.ParameterType.FullName} {p.Name}" for p in m.GetParameters()
+                )
+                print(f"  {m.ReturnType.FullName} {m.Name}({params})")
+
+
 class TestDiscoverEvents:
     """Step 1.5: Check events on AccessControlUnitManager."""
 

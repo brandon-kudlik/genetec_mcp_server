@@ -26,6 +26,7 @@ class GenetecConnection:
 
         self._engine = Engine()
         self._last_failure: Optional[str] = None
+        self._type_cache: dict[str, type] = {}
 
         # Set SDK client certificate for authentication
         cert = client_certificate or CLIENT_CERTIFICATE
@@ -41,6 +42,38 @@ class GenetecConnection:
     def _on_directory_certificate_validation(sender, e) -> None:  # type: ignore[no-untyped-def]
         """Accept the directory server's TLS certificate."""
         e.AcceptDirectory = True
+
+    def _import_type(self, type_name: str):  # type: ignore[no-untyped-def]
+        """Resolve an SDK type by name via reflection, then import it.
+
+        Uses assembly scanning to find the type's namespace, then imports
+        via pythonnet. Results are cached for subsequent lookups.
+
+        Args:
+            type_name: Simple name of the .NET type (e.g. 'AccessControlExtensionType').
+
+        Returns:
+            The resolved Python-wrapped .NET type.
+
+        Raises:
+            RuntimeError: If the type cannot be found in any loaded assembly.
+        """
+        if type_name in self._type_cache:
+            return self._type_cache[type_name]
+
+        import System  # type: ignore[import-untyped]
+
+        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
+            for t in asm.GetTypes():
+                if t.Name == type_name:
+                    namespace = t.Namespace
+                    module = __import__(namespace, fromlist=[type_name])
+                    resolved = getattr(module, type_name)
+                    self._type_cache[type_name] = resolved
+                    return resolved
+        raise RuntimeError(
+            f"Could not find {type_name} in loaded SDK assemblies."
+        )
 
     @property
     def engine(self):  # type: ignore[no-untyped-def]
@@ -226,20 +259,8 @@ class GenetecConnection:
         from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
         from System.Security import SecureString  # type: ignore[import-untyped]
 
-        # Resolve SDK types via reflection then import by discovered namespace
-        def _import_type(type_name: str):
-            for asm in System.AppDomain.CurrentDomain.GetAssemblies():
-                for t in asm.GetTypes():
-                    if t.Name == type_name:
-                        namespace = t.Namespace
-                        module = __import__(namespace, fromlist=[type_name])
-                        return getattr(module, type_name)
-            raise RuntimeError(
-                f"Could not find {type_name} in loaded SDK assemblies."
-            )
-
-        AccessControlExtensionType = _import_type("AccessControlExtensionType")
-        AddAccessControlUnitInfo = _import_type("AddAccessControlUnitInfo")
+        AccessControlExtensionType = self._import_type("AccessControlExtensionType")
+        AddAccessControlUnitInfo = self._import_type("AddAccessControlUnitInfo")
 
         # Build SecureString for the password
         secure_password = SecureString()
@@ -283,6 +304,85 @@ class GenetecConnection:
                 raise RuntimeError(f"Unit enrollment failed: {error_holder[0]}")
 
             return name
+        finally:
+            mgr.UnitEnrollmentSucceeded -= on_success
+            mgr.UnitEnrollmentFailed -= on_failed
+
+    def add_mercury_controller(
+        self,
+        unit_guid: str,
+        ip_address: str,
+        access_manager_guid: str,
+    ) -> str:
+        """Add a Mercury EP/LP sub-controller to an enrolled Cloudlink unit.
+
+        Args:
+            unit_guid: GUID of the parent Cloudlink unit.
+            ip_address: IP address of the Mercury controller.
+            access_manager_guid: GUID of the Access Manager role.
+
+        Returns:
+            A result string describing the outcome.
+
+        Raises:
+            RuntimeError: If not connected or enrollment fails/times out.
+            ValueError: If any required parameter is empty.
+        """
+        if not unit_guid:
+            raise ValueError("unit_guid is required and cannot be empty.")
+        if not ip_address:
+            raise ValueError("ip_address is required and cannot be empty.")
+        if not access_manager_guid:
+            raise ValueError("access_manager_guid is required and cannot be empty.")
+        if not self.is_connected:
+            raise RuntimeError("Not connected to Security Center.")
+
+        import System  # type: ignore[import-untyped]
+        from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
+
+        AccessControlExtensionType = self._import_type("AccessControlExtensionType")
+        AddAccessControlUnitInfo = self._import_type("AddAccessControlUnitInfo")
+
+        info = AddAccessControlUnitInfo(
+            address=NetIPAddress.Parse(ip_address),
+            extensionType=AccessControlExtensionType.MercuryLP,
+            port=3001,
+        )
+
+        role_guid = System.Guid(access_manager_guid)
+        parent_guid = System.Guid(unit_guid)
+
+        # Subscribe to enrollment events to capture result
+        done = threading.Event()
+        result_holder: list[str] = []
+        error_holder: list[str] = []
+
+        def on_success(sender, e):  # type: ignore[no-untyped-def]
+            result_holder.append("success")
+            done.set()
+
+        def on_failed(sender, e):  # type: ignore[no-untyped-def]
+            error_holder.append(str(e.ActionDetails))
+            done.set()
+
+        mgr = self._engine.AccessControlUnitManager
+        mgr.UnitEnrollmentSucceeded += on_success
+        mgr.UnitEnrollmentFailed += on_failed
+
+        try:
+            mgr.EnrollAccessControlUnit(info, role_guid)
+
+            if not done.wait(timeout=60.0):
+                raise RuntimeError(
+                    "Mercury controller enrollment timed out after 60 seconds."
+                )
+
+            if error_holder:
+                raise RuntimeError(
+                    f"Mercury controller enrollment failed: {error_holder[0]}"
+                )
+
+            return f"Mercury controller added at {ip_address} to unit {unit_guid}"
         finally:
             mgr.UnitEnrollmentSucceeded -= on_success
             mgr.UnitEnrollmentFailed -= on_failed

@@ -173,6 +173,70 @@ class TestAddCloudlinkUnit:
             conn.dispose()
 
 
+class TestAddMercuryController:
+    """Tests for adding Mercury sub-controllers to a Cloudlink unit."""
+
+    def test_raises_when_not_connected(self):
+        """add_mercury_controller should raise RuntimeError if not connected."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.add_mercury_controller(
+                    unit_guid="00000000-0000-0000-0000-000000000001",
+                    ip_address="192.168.1.50",
+                    access_manager_guid="00000000-0000-0000-0000-000000000002",
+                )
+        finally:
+            conn.dispose()
+
+    def test_requires_unit_guid(self):
+        """add_mercury_controller should raise ValueError if unit_guid is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="unit_guid"):
+                conn.add_mercury_controller(
+                    unit_guid="",
+                    ip_address="192.168.1.50",
+                    access_manager_guid="00000000-0000-0000-0000-000000000002",
+                )
+        finally:
+            conn.dispose()
+
+    def test_requires_ip_address(self):
+        """add_mercury_controller should raise ValueError if ip_address is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="ip_address"):
+                conn.add_mercury_controller(
+                    unit_guid="00000000-0000-0000-0000-000000000001",
+                    ip_address="",
+                    access_manager_guid="00000000-0000-0000-0000-000000000002",
+                )
+        finally:
+            conn.dispose()
+
+    def test_requires_access_manager_guid(self):
+        """add_mercury_controller should raise ValueError if access_manager_guid is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="access_manager_guid"):
+                conn.add_mercury_controller(
+                    unit_guid="00000000-0000-0000-0000-000000000001",
+                    ip_address="192.168.1.50",
+                    access_manager_guid="",
+                )
+        finally:
+            conn.dispose()
+
+
 class TestGetSystemVersion:
     """Tests for retrieving Security Center system version (requires live server)."""
 

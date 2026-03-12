@@ -122,3 +122,34 @@ async def add_cloudlink_unit(
         return f"Cloudlink unit enrolled successfully: {result} at {ip_address}"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def add_mercury_controller(
+    ctx: Context,
+    unit_guid: str,
+    ip_address: str,
+    access_manager_guid: str,
+) -> str:
+    """Add a Mercury EP/LP sub-controller to an enrolled Synergis Cloudlink unit.
+
+    Args:
+        unit_guid: GUID of the parent Cloudlink unit that the Mercury controller connects to.
+        ip_address: IP address of the Mercury controller on the RS-485/IP network.
+        access_manager_guid: GUID of the Access Manager role managing the unit.
+
+    Returns:
+        A success message or an error description.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.add_mercury_controller(
+            unit_guid=unit_guid,
+            ip_address=ip_address,
+            access_manager_guid=access_manager_guid,
+        )
+        return f"Mercury controller enrolled successfully: {result}"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"

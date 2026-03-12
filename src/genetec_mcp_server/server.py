@@ -128,15 +128,26 @@ async def add_cloudlink_unit(
 async def add_mercury_controller(
     ctx: Context,
     unit_guid: str,
+    name: str,
+    controller_type: str,
     ip_address: str,
-    access_manager_guid: str,
+    port: int = 3001,
+    channel: int = 0,
 ) -> str:
-    """Add a Mercury EP/LP sub-controller to an enrolled Synergis Cloudlink unit.
+    """Add a Mercury EP/LP/MP sub-controller to an enrolled Synergis Cloudlink unit.
+
+    This adds a Mercury interface module as a bus peripheral under an existing
+    Cloudlink access control unit.
 
     Args:
-        unit_guid: GUID of the parent Cloudlink unit that the Mercury controller connects to.
-        ip_address: IP address of the Mercury controller on the RS-485/IP network.
-        access_manager_guid: GUID of the Access Manager role managing the unit.
+        unit_guid: GUID of the parent Cloudlink unit.
+        name: Display name for the interface module.
+        controller_type: Mercury model. Valid types: EP1501, EP1501WithExpansion,
+            EP1502, EP2500, EP4502, LP1501, LP1501WithExpansion, LP1502, LP2500,
+            LP4502, MP1501, MP1501WithExpansion, MP1502, MP2500, MP4502, M5IC, MSICS.
+        ip_address: IP address of the Mercury controller.
+        port: TCP port (default 3001).
+        channel: Channel number (default 0).
 
     Returns:
         A success message or an error description.
@@ -147,8 +158,11 @@ async def add_mercury_controller(
     try:
         result = connection.add_mercury_controller(
             unit_guid=unit_guid,
+            name=name,
+            controller_type=controller_type,
             ip_address=ip_address,
-            access_manager_guid=access_manager_guid,
+            port=port,
+            channel=channel,
         )
         return f"Mercury controller enrolled successfully: {result}"
     except (RuntimeError, ValueError) as e:

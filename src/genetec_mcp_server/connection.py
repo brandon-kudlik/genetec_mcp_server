@@ -308,84 +308,84 @@ class GenetecConnection:
             mgr.UnitEnrollmentSucceeded -= on_success
             mgr.UnitEnrollmentFailed -= on_failed
 
+    # Supported Mercury controller types for add_mercury_controller
+    MERCURY_CONTROLLER_TYPES = {
+        "EP1501", "EP1501WithExpansion", "EP1502", "EP2500", "EP4502",
+        "LP1501", "LP1501WithExpansion", "LP1502", "LP2500", "LP4502",
+        "MP1501", "MP1501WithExpansion", "MP1502", "MP2500", "MP4502",
+        "M5IC", "MSICS",
+    }
+
     def add_mercury_controller(
         self,
         unit_guid: str,
+        name: str,
+        controller_type: str,
         ip_address: str,
-        access_manager_guid: str,
+        port: int = 3001,
+        channel: int = 0,
     ) -> str:
-        """Add a Mercury EP/LP sub-controller to an enrolled Cloudlink unit.
+        """Add a Mercury EP/LP/MP sub-controller to an enrolled Cloudlink unit.
+
+        Uses AccessControlInterfacePeripheralsBuilder to add the controller
+        as a bus interface module under the specified unit.
 
         Args:
             unit_guid: GUID of the parent Cloudlink unit.
+            name: Display name for the interface module.
+            controller_type: Mercury model (e.g. 'LP1502', 'EP1502', 'EP4502').
             ip_address: IP address of the Mercury controller.
-            access_manager_guid: GUID of the Access Manager role.
+            port: TCP port (default 3001).
+            channel: Channel number (default 0).
 
         Returns:
             A result string describing the outcome.
 
         Raises:
-            RuntimeError: If not connected or enrollment fails/times out.
-            ValueError: If any required parameter is empty.
+            RuntimeError: If not connected or build fails.
+            ValueError: If any required parameter is empty or type is invalid.
         """
         if not unit_guid:
             raise ValueError("unit_guid is required and cannot be empty.")
+        if not name:
+            raise ValueError("name is required and cannot be empty.")
+        if not controller_type:
+            raise ValueError("controller_type is required and cannot be empty.")
+        if controller_type not in self.MERCURY_CONTROLLER_TYPES:
+            raise ValueError(
+                f"Unknown controller_type '{controller_type}'. "
+                f"Valid types: {sorted(self.MERCURY_CONTROLLER_TYPES)}"
+            )
         if not ip_address:
             raise ValueError("ip_address is required and cannot be empty.")
-        if not access_manager_guid:
-            raise ValueError("access_manager_guid is required and cannot be empty.")
         if not self.is_connected:
             raise RuntimeError("Not connected to Security Center.")
 
         import System  # type: ignore[import-untyped]
         from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
 
-        AccessControlExtensionType = self._import_type("AccessControlExtensionType")
-        AddAccessControlUnitInfo = self._import_type("AddAccessControlUnitInfo")
-
-        info = AddAccessControlUnitInfo(
-            address=NetIPAddress.Parse(ip_address),
-            extensionType=AccessControlExtensionType.MercuryLP,
-            port=3001,
+        # Resolve the Mercury controller class (e.g. MercuryLP1502)
+        mercury_class_name = f"Mercury{controller_type}"
+        MercuryClass = self._import_type(mercury_class_name)
+        AccessControlInterfacePeripheralsBuilder = self._import_type(
+            "AccessControlInterfacePeripheralsBuilder"
         )
 
-        role_guid = System.Guid(access_manager_guid)
+        # Create and configure the Mercury interface object
+        mercury_interface = MercuryClass()
+        mercury_interface.IpAddress = NetIPAddress.Parse(ip_address)
+        mercury_interface.Port = port
+        mercury_interface.Channel = channel
+
+        # Build and commit via the peripherals builder
         parent_guid = System.Guid(unit_guid)
+        builder = AccessControlInterfacePeripheralsBuilder(
+            self._engine, parent_guid
+        )
+        builder.AddAccessControlBusInterface(name, mercury_interface)
+        builder.Build()
 
-        # Subscribe to enrollment events to capture result
-        done = threading.Event()
-        result_holder: list[str] = []
-        error_holder: list[str] = []
-
-        def on_success(sender, e):  # type: ignore[no-untyped-def]
-            result_holder.append("success")
-            done.set()
-
-        def on_failed(sender, e):  # type: ignore[no-untyped-def]
-            error_holder.append(str(e.ActionDetails))
-            done.set()
-
-        mgr = self._engine.AccessControlUnitManager
-        mgr.UnitEnrollmentSucceeded += on_success
-        mgr.UnitEnrollmentFailed += on_failed
-
-        try:
-            mgr.EnrollAccessControlUnit(info, role_guid)
-
-            if not done.wait(timeout=60.0):
-                raise RuntimeError(
-                    "Mercury controller enrollment timed out after 60 seconds."
-                )
-
-            if error_holder:
-                raise RuntimeError(
-                    f"Mercury controller enrollment failed: {error_holder[0]}"
-                )
-
-            return f"Mercury controller added at {ip_address} to unit {unit_guid}"
-        finally:
-            mgr.UnitEnrollmentSucceeded -= on_success
-            mgr.UnitEnrollmentFailed -= on_failed
+        return f"Mercury {controller_type} '{name}' added at {ip_address} to unit {unit_guid}"
 
     def disconnect(self) -> None:
         """Disconnect from Security Center."""

@@ -185,8 +185,9 @@ class TestAddMercuryController:
             with pytest.raises(RuntimeError, match="Not connected"):
                 conn.add_mercury_controller(
                     unit_guid="00000000-0000-0000-0000-000000000001",
+                    name="Mercury-01",
+                    controller_type="LP1502",
                     ip_address="192.168.1.50",
-                    access_manager_guid="00000000-0000-0000-0000-000000000002",
                 )
         finally:
             conn.dispose()
@@ -200,8 +201,41 @@ class TestAddMercuryController:
             with pytest.raises(ValueError, match="unit_guid"):
                 conn.add_mercury_controller(
                     unit_guid="",
+                    name="Mercury-01",
+                    controller_type="LP1502",
                     ip_address="192.168.1.50",
-                    access_manager_guid="00000000-0000-0000-0000-000000000002",
+                )
+        finally:
+            conn.dispose()
+
+    def test_requires_name(self):
+        """add_mercury_controller should raise ValueError if name is empty."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="name"):
+                conn.add_mercury_controller(
+                    unit_guid="00000000-0000-0000-0000-000000000001",
+                    name="",
+                    controller_type="LP1502",
+                    ip_address="192.168.1.50",
+                )
+        finally:
+            conn.dispose()
+
+    def test_requires_valid_controller_type(self):
+        """add_mercury_controller should raise ValueError for unknown controller_type."""
+        from genetec_mcp_server.connection import GenetecConnection
+
+        conn = GenetecConnection()
+        try:
+            with pytest.raises(ValueError, match="Unknown controller_type"):
+                conn.add_mercury_controller(
+                    unit_guid="00000000-0000-0000-0000-000000000001",
+                    name="Mercury-01",
+                    controller_type="InvalidType",
+                    ip_address="192.168.1.50",
                 )
         finally:
             conn.dispose()
@@ -215,23 +249,9 @@ class TestAddMercuryController:
             with pytest.raises(ValueError, match="ip_address"):
                 conn.add_mercury_controller(
                     unit_guid="00000000-0000-0000-0000-000000000001",
+                    name="Mercury-01",
+                    controller_type="LP1502",
                     ip_address="",
-                    access_manager_guid="00000000-0000-0000-0000-000000000002",
-                )
-        finally:
-            conn.dispose()
-
-    def test_requires_access_manager_guid(self):
-        """add_mercury_controller should raise ValueError if access_manager_guid is empty."""
-        from genetec_mcp_server.connection import GenetecConnection
-
-        conn = GenetecConnection()
-        try:
-            with pytest.raises(ValueError, match="access_manager_guid"):
-                conn.add_mercury_controller(
-                    unit_guid="00000000-0000-0000-0000-000000000001",
-                    ip_address="192.168.1.50",
-                    access_manager_guid="",
                 )
         finally:
             conn.dispose()

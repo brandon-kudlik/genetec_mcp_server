@@ -238,8 +238,9 @@ class TestAddMercuryControllerTool:
         result = await add_mercury_controller(
             mock_ctx,
             unit_guid="00000000-0000-0000-0000-000000000001",
+            name="Mercury-01",
+            controller_type="LP1502",
             ip_address="192.168.1.50",
-            access_manager_guid="00000000-0000-0000-0000-000000000002",
         )
         assert "not connected" in result.lower()
 
@@ -250,7 +251,9 @@ class TestAddMercuryControllerTool:
 
         mock_conn = MagicMock()
         mock_conn.is_connected = True
-        mock_conn.add_mercury_controller.return_value = "Mercury controller added"
+        mock_conn.add_mercury_controller.return_value = (
+            "Mercury LP1502 'Mercury-01' added at 192.168.1.50 to unit 00000000-0000-0000-0000-000000000001"
+        )
 
         mock_ctx = MagicMock()
         mock_ctx.request_context.lifespan_context.connection = mock_conn
@@ -258,14 +261,18 @@ class TestAddMercuryControllerTool:
         result = await add_mercury_controller(
             mock_ctx,
             unit_guid="00000000-0000-0000-0000-000000000001",
+            name="Mercury-01",
+            controller_type="LP1502",
             ip_address="192.168.1.50",
-            access_manager_guid="00000000-0000-0000-0000-000000000002",
         )
         assert "mercury" in result.lower()
         mock_conn.add_mercury_controller.assert_called_once_with(
             unit_guid="00000000-0000-0000-0000-000000000001",
+            name="Mercury-01",
+            controller_type="LP1502",
             ip_address="192.168.1.50",
-            access_manager_guid="00000000-0000-0000-0000-000000000002",
+            port=3001,
+            channel=0,
         )
 
     @pytest.mark.asyncio
@@ -283,8 +290,9 @@ class TestAddMercuryControllerTool:
         result = await add_mercury_controller(
             mock_ctx,
             unit_guid="00000000-0000-0000-0000-000000000001",
+            name="Mercury-01",
+            controller_type="LP1502",
             ip_address="192.168.1.50",
-            access_manager_guid="00000000-0000-0000-0000-000000000002",
         )
         assert "error" in result.lower()
         assert "SDK failure" in result

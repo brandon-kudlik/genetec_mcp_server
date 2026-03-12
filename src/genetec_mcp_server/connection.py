@@ -67,8 +67,26 @@ class GenetecConnection:
             for t in asm.GetTypes():
                 if t.Name == type_name:
                     namespace = t.Namespace
-                    module = __import__(namespace, fromlist=[type_name])
-                    resolved = getattr(module, type_name)
+                    try:
+                        module = __import__(namespace, fromlist=[type_name])
+                        resolved = getattr(module, type_name)
+                    except (AttributeError, ImportError):
+                        # Some SDK types can't be imported via pythonnet's
+                        # namespace mechanism. Fall back to a wrapper that
+                        # uses Activator.CreateInstance with the .NET Type.
+                        net_type = t
+
+                        def _make_factory(nt):  # type: ignore[no-untyped-def]
+                            def factory(*args):  # type: ignore[no-untyped-def]
+                                if args:
+                                    from System import Array, Object  # type: ignore[import-untyped]
+
+                                    clr_args = Array[Object](list(args))
+                                    return System.Activator.CreateInstance(nt, clr_args)
+                                return System.Activator.CreateInstance(nt)
+                            return factory
+
+                        resolved = _make_factory(net_type)
                     self._type_cache[type_name] = resolved
                     return resolved
         raise RuntimeError(

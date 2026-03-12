@@ -1213,6 +1213,226 @@ curl -X POST https://mcp.yourdomain.com/mcp \
 
 ---
 
+## 10. Site-to-VPC VPN Tunnel — Synergis Cloudlink Connectivity
+
+*Provisioned: March 2026*
+
+### Overview
+
+A persistent OpenVPN tunnel connects the Acme Paving on-site network to the AWS VPC, allowing Synergis Cloudlink access control units on the local LAN to communicate directly with WIN-SERVER-01 (Genetec Security Center directory) over private IP space.
+
+### Architecture
+
+```
+On-Site (Acme Paving)                          AWS VPC (us-east-2)
+┌──────────────────────┐                  ┌──────────────────────────────────┐
+│                      │                  │  VPC: vpc-01eff65766274d682      │
+│  Cloudlink units     │                  │  CIDR: 172.31.0.0/16             │
+│  192.168.1.0/24      │   OpenVPN tunnel │                                  │
+│  10.10.10.0/24       │  ═══════════════╪══▶ VPN-SERVER (EC2 t3.micro)    │
+│        │             │  UDP 1194        │    172.31.29.45 / 18.217.103.235 │
+│  ┌─────┴──────┐      │                  │         │                        │
+│  │ Ubiquiti   │──WAN─┘                  │  ┌──────┴────────────┐           │
+│  │ Dream Rtr  │                         │  │  WIN-SERVER-01    │           │
+│  └────────────┘                         │  │  172.31.25.170    │           │
+│                                         │  │  (SC Directory)   │           │
+└─────────────────────────────────────────┘  └───────────────────┘           │
+                                          └──────────────────────────────────┘
+
+Tunnel subnet:  10.8.0.0/24   (OpenVPN internal)
+On-site LAN:    192.168.1.0/24
+Cloudlink VLAN: 10.10.10.0/24
+```
+
+**Traffic flow:** Cloudlink at `10.10.10.x` → Ubiquiti Dream Router → OpenVPN tunnel → VPN-SERVER → VPC routing → `172.31.25.170:4502` (SC Directory)
+
+### VPN Server Details
+
+| Property | Value |
+|----------|-------|
+| Instance ID | `i-0723beb93fb94f9ed` |
+| Instance type | `t3.micro` (Ubuntu 24.04 LTS) |
+| Elastic IP | `18.217.103.235` |
+| Private IP | `172.31.29.45` |
+| ENI | `eni-0ebbf4bee2132dde4` |
+| Security group | `vpn-server-sg` (`sg-0fecfa3530ec81205`) |
+| Region | `us-east-2` |
+
+### Security Group — `vpn-server-sg`
+
+| Protocol | Port | Source | Purpose |
+|----------|------|--------|---------|
+| UDP | 1194 | `0.0.0.0/0` | OpenVPN tunnel (public) |
+| All | All | `192.168.1.0/24` | On-site LAN via tunnel (return traffic) |
+| All | All | `10.10.10.0/24` | Cloudlink VLAN via tunnel (return traffic) |
+| All | All | `172.31.0.0/16` | VPC internal traffic for on-site forwarding |
+| TCP | 22 | `sg-098267fc8c11a5c6d` | EC2 Instance Connect Endpoint (EICE) |
+
+> SSH via public internet was removed after setup. Use the EICE (`eice-048ed35f3415a7ad6`) for shell access — see Maintenance Procedures below.
+
+### VPN Server — Linux Kernel / iptables Configuration
+
+**`/etc/sysctl.d/99-vpn.conf`** (persisted across reboots):
+```ini
+net.ipv4.ip_forward=1
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.tun0.rp_filter=0
+net.ipv4.conf.ens5.rp_filter=0
+```
+
+> `rp_filter=0` is required on all relevant interfaces. Strict reverse-path filtering (value `2`) drops asymmetric-routed traffic, which breaks VPC↔on-site forwarding.
+
+**iptables — NAT POSTROUTING** (`/etc/iptables/rules.v4` via `iptables-persistent`):
+```
+-A POSTROUTING -s 10.8.0.0/24 -o ens5 -j MASQUERADE
+```
+
+> Only VPN-tunnel-client traffic (10.8.0.0/24) is masqueraded for VPC access. **Do NOT add a `MASQUERADE -o tun0` rule** — it hides WIN-SERVER-01's real source IP from the Cloudlink, breaking the Security Center enrollment callback on TCP 4502.
+
+**FORWARD chain policy:** `ACCEPT` (default). No additional FORWARD rules needed.
+
+### VPC Route Table — `rtb-0f6e481139fd80b73`
+
+| Destination | Target | Purpose |
+|-------------|--------|---------|
+| `192.168.1.0/24` | `eni-0ebbf4bee2132dde4` | On-site LAN → VPN server |
+| `10.10.10.0/24` | `eni-0ebbf4bee2132dde4` | Cloudlink VLAN → VPN server |
+
+Source/destination check is **disabled** on `eni-0ebbf4bee2132dde4` to allow routing.
+
+### OpenVPN Configuration
+
+| Setting | Value |
+|---------|-------|
+| Protocol | UDP |
+| Port | 1194 |
+| Cipher | AES-256-GCM |
+| Tunnel subnet | `10.8.0.0/255.255.255.0` |
+| Pushed routes | `172.31.0.0/255.255.0.0` |
+| Auth | Certificate (EasyRSA 3) + PAM password |
+| Client name | `ubiquiti-site` |
+| Config path | `/etc/openvpn/server/server.conf` |
+| CCD path | `/etc/openvpn/ccd/ubiquiti-site` |
+| PKI path | `/etc/openvpn/easy-rsa/pki/` |
+| Client .ovpn | `/root/ubiquiti-site.ovpn` |
+
+**CCD (`/etc/openvpn/ccd/ubiquiti-site`):**
+```
+iroute 192.168.1.0 255.255.255.0
+iroute 10.10.10.0 255.255.255.0
+```
+
+### `windows-servers-sg` Additional Rules
+
+These rules were added to allow Cloudlinks through the tunnel to reach WIN-SERVER-01 and WIN-SERVER-02:
+
+| Protocol | Port | Source | Purpose |
+|----------|------|--------|---------|
+| TCP | 4502 | `192.168.1.0/24` | SC Directory from Cloudlinks (legacy LAN) |
+| TCP | 4502 | `10.10.10.0/24` | SC Directory from Cloudlink VLAN |
+| All | All | `10.8.0.0/24` | VPN tunnel subnet |
+
+### CloudWatch Alarms
+
+| Alarm | Metric | Threshold | Action |
+|-------|--------|-----------|--------|
+| `VPN-SERVER-HighCPU` | `CPUUtilization` | > 80% for 10 min | Alert |
+| `VPN-SERVER-StatusCheckFailed` | `StatusCheckFailed` | ≥ 1 for 2 checks | Alert |
+
+### Systemd Auto-Restart
+
+OpenVPN is configured to restart automatically on failure via a systemd drop-in:
+
+```
+/etc/systemd/system/openvpn-server@server.service.d/override.conf
+```
+```ini
+[Service]
+Restart=always
+RestartSec=5
+```
+
+### Maintenance Procedures
+
+#### Restart OpenVPN (if tunnel drops)
+```bash
+# Via AWS Systems Manager Session Manager (preferred — no SSH needed)
+aws ssm start-session --target i-0723beb93fb94f9ed --region us-east-2
+
+# Then on the instance:
+sudo systemctl restart openvpn-server@server
+sudo systemctl status openvpn-server@server
+```
+
+#### Check Connected Clients
+```bash
+sudo cat /var/log/openvpn-status.log
+```
+
+#### View OpenVPN Logs
+```bash
+sudo journalctl -u openvpn-server@server -n 100 --no-pager
+sudo tail -f /var/log/openvpn.log
+```
+
+#### Test Tunnel Connectivity (from WIN-SERVER-01)
+```powershell
+# Test SC Directory reachable from on-site (should be done from 192.168.1.x)
+Test-NetConnection -ComputerName 172.31.25.170 -Port 4502
+
+# Test Cloudlink reachable from VPC
+Test-NetConnection -ComputerName 10.10.10.204 -Port 80
+```
+
+#### Certificate Renewal (EasyRSA 3)
+
+Certificates expire in **10 years** by default. To renew the client cert:
+
+```bash
+cd /etc/openvpn/easy-rsa
+# Revoke old cert
+./easyrsa revoke ubiquiti-site
+./easyrsa gen-crl
+cp pki/crl.pem /etc/openvpn/server/
+
+# Generate new cert
+./easyrsa --batch gen-req ubiquiti-site nopass
+./easyrsa --batch sign-req client ubiquiti-site
+
+# Rebuild .ovpn and reload into Dream Router
+```
+
+#### SSH Access via EC2 Instance Connect Endpoint (no port 22 required)
+
+An EC2 Instance Connect Endpoint (`eice-048ed35f3415a7ad6`) is permanently provisioned in the VPN server's subnet. Use it to SSH in without opening port 22 to the internet:
+
+```bash
+ssh -o ProxyCommand='aws ec2-instance-connect open-tunnel \
+  --instance-id i-0723beb93fb94f9ed \
+  --remote-port 22 --region us-east-2' \
+  -i windows-servers-key.pem \
+  -o StrictHostKeyChecking=no \
+  ubuntu@i-0723beb93fb94f9ed
+```
+
+> The EICE SG (`sg-098267fc8c11a5c6d`) is already allowed inbound on TCP 22 in `vpn-server-sg`. No temporary rule changes needed.
+
+### Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Dream Router shows "Disconnected" | ISP IP changed or UDP 1194 blocked | Check ISP, verify EIP is still `18.217.103.235` |
+| Cloudlink unreachable from VPC | Missing VPC route or wrong iroute | Verify `ip route` on VPN server includes `10.10.10.0/24 via tun0`; verify `rtb-0f6e481139fd80b73` has `10.10.10.0/24 → eni-0ebbf4bee2132dde4` |
+| VPC can't reach Cloudlinks (one-way tunnel) | UniFi firewall blocking inbound VPN traffic | In UniFi → Security → Firewall Rules, ensure an **Internet In** rule exists: source = VPC address group (`172.31.0.0/16` + `10.8.0.0/24`), destination = Cloudlink VLAN, action = Accept, Before Predefined checked |
+| SC Directory login fails from Cloudlink | Port 4502 blocked | Check `windows-servers-sg` allows `10.10.10.0/24` on TCP 4502 |
+| Cloudlink enrollment returns "Unable to connect" | MASQUERADE on tun0 hides WIN-SERVER-01's IP | Verify `iptables -t nat -L POSTROUTING` does **not** contain `-o tun0 -j MASQUERADE`; if present, remove with `iptables -t nat -D POSTROUTING -o tun0 -j MASQUERADE` and save with `iptables-save > /etc/iptables/rules.v4` |
+| Ping/web UI unreachable despite tunnel being up | rp_filter dropping asymmetric traffic | Run `sysctl net.ipv4.conf.all.rp_filter net.ipv4.conf.tun0.rp_filter net.ipv4.conf.ens5.rp_filter` — all must be `0`; fix with `sysctl -w net.ipv4.conf.all.rp_filter=0` etc. and persist in `/etc/sysctl.d/99-vpn.conf` |
+| WIN-SERVER-01 can't forward to on-site (packets dropped at SG) | `vpn-server-sg` missing VPC CIDR inbound rule | Add `All traffic` inbound rule for `172.31.0.0/16` to `vpn-server-sg` |
+| OpenVPN service crashed | Check logs | `journalctl -u openvpn-server@server -n 50` |
+| VPN server unreachable entirely | Instance stopped or StatusCheck failed | Check CloudWatch alarm, start instance via console |
+
+---
+
 *Pricing figures are approximate On-Demand rates for US East (N. Virginia) as of March 2026. Verify current prices at https://aws.amazon.com/ec2/pricing/on-demand/ before finalising budgets.*
 
 *Genetec MCP server source: https://github.com/brandon-kudlik/genetec_mcp_server*

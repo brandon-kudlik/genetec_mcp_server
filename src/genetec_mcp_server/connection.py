@@ -73,17 +73,27 @@ class GenetecConnection:
                     except (AttributeError, ImportError):
                         # Some SDK types can't be imported via pythonnet's
                         # namespace mechanism. Fall back to a wrapper that
-                        # uses Activator.CreateInstance with the .NET Type.
+                        # invokes the constructor via reflection to preserve
+                        # parameter type matching.
                         net_type = t
 
                         def _make_factory(nt):  # type: ignore[no-untyped-def]
                             def factory(*args):  # type: ignore[no-untyped-def]
-                                if args:
-                                    from System import Array, Object  # type: ignore[import-untyped]
+                                if not args:
+                                    return System.Activator.CreateInstance(nt)
+                                # Match constructor by parameter count, then
+                                # invoke directly to let .NET resolve types.
+                                for ctor in nt.GetConstructors():
+                                    params = ctor.GetParameters()
+                                    if len(params) == len(args):
+                                        from System import Array, Object  # type: ignore[import-untyped]
 
-                                    clr_args = Array[Object](list(args))
-                                    return System.Activator.CreateInstance(nt, clr_args)
-                                return System.Activator.CreateInstance(nt)
+                                        clr_args = Array[Object](list(args))
+                                        return ctor.Invoke(clr_args)
+                                raise RuntimeError(
+                                    f"No constructor on {nt.Name} with "
+                                    f"{len(args)} parameter(s)."
+                                )
                             return factory
 
                         resolved = _make_factory(net_type)

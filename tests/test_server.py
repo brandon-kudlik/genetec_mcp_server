@@ -526,6 +526,145 @@ class TestConfigureIoDevicesTool:
         assert "Transaction failed" in result
 
 
+class TestCreateDoorsTool:
+    """Tests for the create_doors MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "create_doors" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import create_doors
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_doors(
+            mock_ctx,
+            doors=[{"name": "Door 1"}],
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_success_message(self):
+        from genetec_mcp_server.server import create_doors
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_doors.return_value = {
+            "results": [
+                {"name": "Door 1", "guid": "door-guid-1", "status": "Created"},
+            ],
+            "createdCount": 1,
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_doors(
+            mock_ctx,
+            doors=[{"name": "Door 1"}],
+        )
+        assert "1" in result
+        assert "door-guid-1" in result
+        mock_conn.create_doors.assert_called_once_with(
+            doors=[{"name": "Door 1"}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import create_doors
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_doors.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_doors(
+            mock_ctx,
+            doors=[{"name": "Door 1"}],
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
+class TestConfigureDoorHardwareTool:
+    """Tests for the configure_door_hardware MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "configure_door_hardware" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import configure_door_hardware
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_door_hardware(
+            mock_ctx,
+            assignments=[{"doorGuid": "door-1", "hardware": {}}],
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_success_message(self):
+        from genetec_mcp_server.server import configure_door_hardware
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.configure_door_hardware.return_value = {
+            "results": [
+                {"doorGuid": "door-guid-1", "status": "Configured"},
+            ],
+            "configuredCount": 1,
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_door_hardware(
+            mock_ctx,
+            assignments=[{"doorGuid": "door-guid-1", "hardware": {"doorLockGuid": "lock-1"}}],
+        )
+        assert "1" in result
+        mock_conn.configure_door_hardware.assert_called_once_with(
+            assignments=[{"doorGuid": "door-guid-1", "hardware": {"doorLockGuid": "lock-1"}}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import configure_door_hardware
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.configure_door_hardware.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_door_hardware(
+            mock_ctx,
+            assignments=[{"doorGuid": "door-1", "hardware": {}}],
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

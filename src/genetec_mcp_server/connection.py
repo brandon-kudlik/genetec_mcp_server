@@ -306,6 +306,50 @@ class GenetecConnection:
             {"deviceConfigs": device_configs},
         )
 
+    def create_doors(self, doors: list[dict[str, Any]]) -> dict[str, Any]:
+        """Batch create door entities via the SDK service.
+
+        Args:
+            doors: List of door dicts. Each must contain 'name' and optionally
+                'properties' with timing/event settings.
+
+        Returns:
+            Response dict with 'results' list and 'createdCount'.
+
+        Raises:
+            ValueError: If doors list is empty or a door is missing 'name'.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not doors:
+            raise ValueError("doors is required and cannot be empty.")
+        for door in doors:
+            if not door.get("name"):
+                raise ValueError("Each door must contain a 'name'.")
+
+        return self._post("/api/doors/batch", {"doors": doors})
+
+    def configure_door_hardware(self, assignments: list[dict[str, Any]]) -> dict[str, Any]:
+        """Batch configure door hardware associations via the SDK service.
+
+        Args:
+            assignments: List of assignment dicts. Each must contain 'doorGuid'
+                and 'hardware' with entrySide/exitSide/doorLockGuid.
+
+        Returns:
+            Response dict with 'results' list and 'configuredCount'.
+
+        Raises:
+            ValueError: If assignments list is empty or missing 'doorGuid'.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not assignments:
+            raise ValueError("assignments is required and cannot be empty.")
+        for assignment in assignments:
+            if not assignment.get("doorGuid"):
+                raise ValueError("Each assignment must contain a 'doorGuid'.")
+
+        return self._post("/api/doors/hardware/batch", {"assignments": assignments})
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 

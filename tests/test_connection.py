@@ -451,3 +451,130 @@ class TestConfigureIoDevices:
                     device_configs=[{"deviceGuid": "dev-1"}],
                 )
         conn.dispose()
+
+
+class TestCreateDoors:
+    """Tests for batch door creation."""
+
+    def test_returns_results_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {
+                    "results": [
+                        {"name": "Door 1", "guid": "door-guid-1", "status": "Created"},
+                        {"name": "Door 2", "guid": "door-guid-2", "status": "Created"},
+                    ],
+                    "createdCount": 2,
+                }}
+            )
+            result = conn.create_doors(doors=[
+                {"name": "Door 1"},
+                {"name": "Door 2", "properties": {"relockDelayInSeconds": 5}},
+            ])
+        assert result["createdCount"] == 2
+        assert len(result["results"]) == 2
+        assert result["results"][0]["guid"] == "door-guid-1"
+        conn.dispose()
+
+    def test_requires_non_empty_list(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="doors.*cannot be empty"):
+            conn.create_doors(doors=[])
+        conn.dispose()
+
+    def test_requires_name_in_each_door(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="name"):
+            conn.create_doors(doors=[{"properties": {}}])
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"results": [], "createdCount": 0}}
+            )
+            doors = [{"name": "Door 1", "properties": {"relockDelayInSeconds": 5}}]
+            conn.create_doors(doors=doors)
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body == {"doors": doors}
+            mock_post.assert_called_once_with(
+                "/api/doors/batch",
+                json={"doors": doors},
+            )
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Failed to create doors."}
+            )
+            with pytest.raises(RuntimeError, match="Failed to create"):
+                conn.create_doors(doors=[{"name": "Door 1"}])
+        conn.dispose()
+
+
+class TestConfigureDoorHardware:
+    """Tests for batch door hardware configuration."""
+
+    def test_returns_results_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {
+                    "results": [
+                        {"doorGuid": "door-guid-1", "status": "Configured"},
+                    ],
+                    "configuredCount": 1,
+                }}
+            )
+            result = conn.configure_door_hardware(assignments=[
+                {
+                    "doorGuid": "door-guid-1",
+                    "hardware": {
+                        "entrySide": {"readerGuid": "reader-1"},
+                        "doorLockGuid": "lock-1",
+                    },
+                },
+            ])
+        assert result["configuredCount"] == 1
+        conn.dispose()
+
+    def test_requires_non_empty_list(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="assignments.*cannot be empty"):
+            conn.configure_door_hardware(assignments=[])
+        conn.dispose()
+
+    def test_requires_door_guid_in_each_assignment(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="doorGuid"):
+            conn.configure_door_hardware(assignments=[{"hardware": {}}])
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"results": [], "configuredCount": 0}}
+            )
+            assignments = [{"doorGuid": "door-1", "hardware": {"doorLockGuid": "lock-1"}}]
+            conn.configure_door_hardware(assignments=assignments)
+            mock_post.assert_called_once_with(
+                "/api/doors/hardware/batch",
+                json={"assignments": assignments},
+            )
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Door not found."}
+            )
+            with pytest.raises(RuntimeError, match="Door not found"):
+                conn.configure_door_hardware(assignments=[{"doorGuid": "door-1", "hardware": {}}])
+        conn.dispose()

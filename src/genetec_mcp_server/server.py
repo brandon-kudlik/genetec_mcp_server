@@ -244,6 +244,78 @@ async def list_io_devices(ctx: Context, interface_module_guid: str) -> str:
 
 
 @mcp.tool()
+async def create_doors(
+    ctx: Context,
+    doors: list[dict[str, Any]],
+) -> str:
+    """Batch create door entities in Genetec Security Center.
+
+    Args:
+        doors: List of door definitions. Each dict must contain:
+            - name (str, required): Display name for the door.
+            - properties (dict, optional): Door configuration with:
+              - relockDelayInSeconds (int): Time before door relocks.
+              - standardEntryTimeInSeconds (int): Standard entry time.
+              - extendedEntryTimeInSeconds (int): Extended entry time.
+              - standardGrantTimeInSeconds (int): Standard grant time.
+              - extendedGrantTimeInSeconds (int): Extended grant time.
+              - relockOnClose (bool): Whether to relock when door closes.
+              - heldOpenEventsEnabled (bool): Enable held-open events.
+              - forcedOpenEventsEnabled (bool): Enable forced-open events.
+
+    Returns:
+        A summary of created doors with their GUIDs.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.create_doors(doors=doors)
+        count = result.get("createdCount", 0)
+        lines = [f"Created {count} door(s):"]
+        for door in result.get("results", []):
+            lines.append(f"- {door.get('name', 'Unknown')}: {door.get('guid', 'N/A')} ({door.get('status', '')})")
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def configure_door_hardware(
+    ctx: Context,
+    assignments: list[dict[str, Any]],
+) -> str:
+    """Link hardware (readers, inputs, outputs) to door sides in Genetec Security Center.
+
+    Args:
+        assignments: List of hardware assignments. Each dict must contain:
+            - doorGuid (str, required): GUID of the door to configure.
+            - hardware (dict, required): Hardware configuration with:
+              - entrySide (dict, optional): Entry side hardware:
+                - readerGuid (str): GUID of the reader device.
+                - rexGuid (str): GUID of the REX (request-to-exit) device.
+                - doorSensorGuid (str): GUID of the door sensor.
+              - exitSide (dict, optional): Exit side hardware (same fields).
+              - doorLockGuid (str, optional): GUID of the door lock output.
+
+    Returns:
+        A summary of configured doors.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.configure_door_hardware(assignments=assignments)
+        count = result.get("configuredCount", 0)
+        lines = [f"Configured hardware for {count} door(s):"]
+        for door in result.get("results", []):
+            lines.append(f"- {door.get('doorGuid', 'Unknown')}: {door.get('status', '')}")
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def configure_io_devices(
     ctx: Context,
     interface_module_guid: str,

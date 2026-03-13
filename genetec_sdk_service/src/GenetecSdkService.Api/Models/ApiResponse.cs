@@ -112,3 +112,80 @@ public class ConfigureIoDevicesResponse
     public string Message { get; set; } = string.Empty;
     public int ConfiguredCount { get; set; }
 }
+
+// Door creation models
+
+public class CreateDoorItem
+{
+    public string Name { get; set; } = string.Empty;
+    public DoorProperties? Properties { get; set; }
+}
+
+public class DoorProperties
+{
+    public int? RelockDelayInSeconds { get; set; }
+    public int? StandardEntryTimeInSeconds { get; set; }
+    public int? ExtendedEntryTimeInSeconds { get; set; }
+    public int? StandardGrantTimeInSeconds { get; set; }
+    public int? ExtendedGrantTimeInSeconds { get; set; }
+    public bool? RelockOnClose { get; set; }
+    public bool? HeldOpenEventsEnabled { get; set; }
+    public bool? ForcedOpenEventsEnabled { get; set; }
+}
+
+public class BatchCreateDoorsRequest
+{
+    public List<CreateDoorItem> Doors { get; set; } = new();
+}
+
+public class DoorResult
+{
+    public string Name { get; set; } = string.Empty;
+    public string Guid { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+}
+
+public class BatchCreateDoorsResponse
+{
+    public List<DoorResult> Results { get; set; } = new();
+    public int CreatedCount { get; set; }
+}
+
+// Door hardware configuration models
+
+public class DoorSideHardware
+{
+    public string? ReaderGuid { get; set; }
+    public string? RexGuid { get; set; }
+    public string? DoorSensorGuid { get; set; }
+}
+
+public class DoorHardwareConfig
+{
+    public DoorSideHardware? EntrySide { get; set; }
+    public DoorSideHardware? ExitSide { get; set; }
+    public string? DoorLockGuid { get; set; }
+}
+
+public class DoorHardwareAssignment
+{
+    public string DoorGuid { get; set; } = string.Empty;
+    public DoorHardwareConfig Hardware { get; set; } = new();
+}
+
+public class BatchConfigureDoorHardwareRequest
+{
+    public List<DoorHardwareAssignment> Assignments { get; set; } = new();
+}
+
+public class DoorHardwareResult
+{
+    public string DoorGuid { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+}
+
+public class BatchConfigureDoorHardwareResponse
+{
+    public List<DoorHardwareResult> Results { get; set; } = new();
+    public int ConfiguredCount { get; set; }
+}

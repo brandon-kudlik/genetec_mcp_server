@@ -30,6 +30,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<GenetecEngineServi
 // Register business services
 builder.Services.AddSingleton<CardholderService>();
 builder.Services.AddSingleton<AccessControlService>();
+builder.Services.AddSingleton<DoorService>();
 
 var app = builder.Build();
 
@@ -37,5 +38,6 @@ var app = builder.Build();
 app.MapSystemEndpoints();
 app.MapCardholderEndpoints();
 app.MapAccessControlEndpoints();
+app.MapDoorEndpoints();
 
 app.Run();

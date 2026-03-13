@@ -449,12 +449,13 @@ public class AccessControlService
                     configuredCount++;
                 }
 
-                // Commit the transaction
-                var commitMethod = tmType.GetMethod("CommitTransaction")
+                // Commit the transaction — select the overload with bool rollBackOnFailure
+                var commitMethod = tmType.GetMethods()
+                    .FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 1
+                        && m.GetParameters()[0].ParameterType == typeof(bool))
+                    ?? tmType.GetMethods().FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 0)
                     ?? throw new InvalidOperationException("Could not find CommitTransaction on TransactionManager.");
-                // Pass rollBackOnFailure: true
-                var commitParams = commitMethod.GetParameters();
-                if (commitParams.Length == 1 && commitParams[0].ParameterType == typeof(bool))
+                if (commitMethod.GetParameters().Length == 1)
                     commitMethod.Invoke(transactionManager, new object[] { true });
                 else
                     commitMethod.Invoke(transactionManager, null);

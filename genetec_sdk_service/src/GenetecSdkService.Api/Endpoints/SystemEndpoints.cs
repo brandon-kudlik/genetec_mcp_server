@@ -15,21 +15,7 @@ public static class SystemEndpoints
             {
                 try
                 {
-                    var engine = engineService.Engine;
-                    var query = engine.ReportManager.CreateReportQuery(ReportType.EntityConfiguration);
-                    query.EntityTypeFilter.Add(EntityType.Server);
-                    var results = query.Query();
-
-                    foreach (System.Data.DataRow row in results.Data.Rows)
-                    {
-                        var guid = new Guid(row["Guid"].ToString()!);
-                        var server = engine.GetEntity(guid);
-                        if (server != null)
-                        {
-                            version = server.Version.ToString();
-                            break;
-                        }
-                    }
+                    version = GetServerVersion(engineService.Engine);
                 }
                 catch
                 {
@@ -51,30 +37,41 @@ public static class SystemEndpoints
 
             try
             {
-                var engine = engineService.Engine;
-                var query = engine.ReportManager.CreateReportQuery(ReportType.EntityConfiguration);
-                query.EntityTypeFilter.Add(EntityType.Server);
-                var results = query.Query();
+                var version = GetServerVersion(engineService.Engine);
+                if (version == null)
+                    return Results.Ok(ApiResponse<VersionData>.Fail("No server entity found in Security Center."));
 
-                foreach (System.Data.DataRow row in results.Data.Rows)
+                return Results.Ok(ApiResponse<VersionData>.Ok(new VersionData
                 {
-                    var guid = new Guid(row["Guid"].ToString()!);
-                    var server = engine.GetEntity(guid);
-                    if (server != null)
-                    {
-                        return Results.Ok(ApiResponse<VersionData>.Ok(new VersionData
-                        {
-                            Version = server.Version.ToString()
-                        }));
-                    }
-                }
-
-                return Results.Ok(ApiResponse<VersionData>.Fail("No server entity found in Security Center."));
+                    Version = version
+                }));
             }
             catch (Exception ex)
             {
                 return Results.Ok(ApiResponse<VersionData>.Fail(ex.Message));
             }
         });
+    }
+
+    private static string? GetServerVersion(Engine engine)
+    {
+        // CreateReportQuery returns base ReportQuery — use dynamic to access
+        // EntityTypeFilter which is on the EntityConfigurationQuery subclass
+        dynamic query = engine.ReportManager.CreateReportQuery(ReportType.EntityConfiguration);
+        query.EntityTypeFilter.Add(EntityType.Server);
+        var results = query.Query();
+
+        foreach (System.Data.DataRow row in results.Data.Rows)
+        {
+            var guid = new Guid(row["Guid"].ToString()!);
+            // GetEntity returns base Entity — use dynamic to access Version property
+            dynamic? server = engine.GetEntity(guid);
+            if (server != null)
+            {
+                return server.Version.ToString();
+            }
+        }
+
+        return null;
     }
 }

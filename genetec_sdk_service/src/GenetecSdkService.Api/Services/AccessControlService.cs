@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Security;
 using Genetec.Sdk;
 using Genetec.Sdk.Entities.AccessControl;
@@ -54,12 +55,13 @@ public class AccessControlService
 
         var tcs = new TaskCompletionSource<string>();
 
+        // UnitEnrollmentFailed uses AddUnitProgressEventArgs (per SDK delegate signature)
         void OnSuccess(object? sender, EventArgs e)
         {
             tcs.TrySetResult("success");
         }
 
-        void OnFailed(object? sender, UnitEnrollmentFailedEventArgs e)
+        void OnFailed(object? sender, AddUnitProgressEventArgs e)
         {
             tcs.TrySetResult($"failed:{e.ActionDetails}");
         }
@@ -110,15 +112,9 @@ public class AccessControlService
         var engine = _engineService.Engine;
         var parentGuid = Guid.Parse(unitGuid);
 
-        // Resolve Mercury class by name via reflection
+        // Resolve Mercury class by name via reflection (e.g. MercuryLP1502)
         var mercuryClassName = $"Mercury{request.ControllerType}";
-        var mercuryType = AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(a =>
-            {
-                try { return a.GetTypes(); }
-                catch { return Array.Empty<Type>(); }
-            })
-            .FirstOrDefault(t => t.Name == mercuryClassName)
+        var mercuryType = FindTypeByName(mercuryClassName)
             ?? throw new InvalidOperationException($"Could not find type {mercuryClassName} in loaded assemblies.");
 
         // Create and configure the Mercury interface object
@@ -127,8 +123,12 @@ public class AccessControlService
         mercuryInterface.Port = request.Port;
         mercuryInterface.Channel = request.Channel;
 
-        // Build and commit via the peripherals builder
-        var builder = new AccessControlInterfacePeripheralsBuilder(engine, parentGuid);
+        // Resolve AccessControlInterfacePeripheralsBuilder via reflection
+        // (it may live in a transitive SDK assembly not directly referenced)
+        var builderType = FindTypeByName("AccessControlInterfacePeripheralsBuilder")
+            ?? throw new InvalidOperationException("Could not find AccessControlInterfacePeripheralsBuilder in loaded assemblies.");
+
+        dynamic builder = Activator.CreateInstance(builderType, engine, parentGuid)!;
         builder.AddAccessControlBusInterface(request.Name, mercuryInterface);
         builder.Build();
 
@@ -136,5 +136,25 @@ public class AccessControlService
         {
             Message = $"Mercury {request.ControllerType} '{request.Name}' added at {request.IpAddress} to unit {unitGuid}"
         };
+    }
+
+    private static Type? FindTypeByName(string typeName)
+    {
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            try
+            {
+                foreach (var t in asm.GetTypes())
+                {
+                    if (t.Name == typeName)
+                        return t;
+                }
+            }
+            catch (ReflectionTypeLoadException)
+            {
+                // Some assemblies may fail to enumerate types — skip them
+            }
+        }
+        return null;
     }
 }

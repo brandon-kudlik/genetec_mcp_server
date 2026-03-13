@@ -26,7 +26,9 @@ public class CardholderService
 
         var engine = _engineService.Engine;
         var entityName = $"{request.FirstName} {request.LastName}";
-        var cardholder = engine.CreateEntity(entityName, EntityType.Cardholder);
+
+        // CreateEntity returns base Entity — use dynamic to access Cardholder properties
+        dynamic cardholder = engine.CreateEntity(entityName, EntityType.Cardholder);
 
         cardholder.FirstName = request.FirstName;
         cardholder.LastName = request.LastName;

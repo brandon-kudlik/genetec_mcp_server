@@ -121,11 +121,12 @@ public class AccessControlService
         var mercuryType = FindTypeByName(mercuryClassName)
             ?? throw new InvalidOperationException($"Could not find type {mercuryClassName} in loaded assemblies.");
 
-        // Create and configure the Mercury interface object
-        dynamic mercuryInterface = Activator.CreateInstance(mercuryType)!;
-        mercuryInterface.IpAddress = IPAddress.Parse(request.IpAddress);
-        mercuryInterface.Port = request.Port;
-        mercuryInterface.Channel = request.Channel;
+        // Create and configure the Mercury interface object via reflection
+        // (dynamic dispatch fails on SDK types due to assembly loading context)
+        var mercuryInterface = Activator.CreateInstance(mercuryType)!;
+        mercuryType.GetProperty("IpAddress")!.SetValue(mercuryInterface, IPAddress.Parse(request.IpAddress));
+        mercuryType.GetProperty("Port")!.SetValue(mercuryInterface, request.Port);
+        mercuryType.GetProperty("Channel")!.SetValue(mercuryInterface, request.Channel);
 
         // Get the builder via the SDK accessor method using reflection
         // (dynamic dispatch fails due to SDK assembly loading context)
@@ -136,10 +137,21 @@ public class AccessControlService
                 "Could not find GetAccessControlInterfacePeripheralsBuilder on EntityManager. " +
                 $"Available methods: {string.Join(", ", emType.GetMethods().Select(m => m.Name).Distinct())}");
 
-        dynamic builder = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
+        var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
             ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
-        builder.AddAccessControlBusInterface(request.Name, mercuryInterface);
-        builder.Build();
+
+        // All SDK builder calls must use reflection (dynamic dispatch fails on SDK types)
+        var builderType = builderObj.GetType();
+
+        var addMethod = builderType.GetMethod("AddAccessControlBusInterface")
+            ?? throw new InvalidOperationException(
+                $"Could not find AddAccessControlBusInterface on {builderType.Name}. " +
+                $"Available methods: {string.Join(", ", builderType.GetMethods().Select(m => m.Name).Distinct())}");
+        addMethod.Invoke(builderObj, new object[] { request.Name, (object)mercuryInterface });
+
+        var buildMethod = builderType.GetMethod("Build")
+            ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
+        buildMethod.Invoke(builderObj, null);
 
         return new MercuryControllerResponse
         {

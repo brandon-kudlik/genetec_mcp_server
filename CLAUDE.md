@@ -87,6 +87,8 @@ Follow strict red/green TDD for all new features:
 - **Assembly resolver MUST be registered in `Program.cs` before any DI/hosted service code** — the runtime loads `Genetec.Sdk.dll` at JIT time when it first encounters `Engine`, so registering inside `StartAsync` is too late
 - **`<UseWPF>true</UseWPF>` required in `.csproj`** — the SDK's `Engine` constructor depends on `System.Windows.Threading.Dispatcher` from `WindowsBase.dll` even in non-UI apps
 - **Use `dynamic` for SDK entity/query objects** — `CreateEntity`/`GetEntity` return base `Entity`, `CreateReportQuery` returns base `ReportQuery`; subclass properties (`FirstName`, `Version`, `EntityTypeFilter`) are only accessible via `dynamic` or explicit casts to types that may live in unreferenced assemblies
+- **Use reflection (not `dynamic`) for SDK builder/manager types** — `dynamic` dispatch fails on types like `EntityManager` and `AccessControlInterfacePeripheralsBuilder` due to SDK assembly loading context. Use `GetType().GetMethod().Invoke()` for these. Example: `engine.EntityManager.GetType().GetMethod("GetAccessControlInterfacePeripheralsBuilder").Invoke(entityManager, new object[] { guid })`
+- **SDK builders are obtained via accessor methods**, not constructed directly — e.g., `engine.EntityManager.GetAccessControlInterfacePeripheralsBuilder(unitGuid)`, `engine.EntityManager.GetCredentialBuilder()`, `engine.EntityManager.GetUserCreationBuilder()`
 - AppDomain key `GENETEC_GCONFIG_PATH_5_13` set for Engine constructor
 - SDK certificate (dev): `KxsD11z743Hf5Gq9mv3+5ekxzemlCiUXkTFY5ba1NOGcLCmGstt2n0zYE9NsNimv`
 - `.cert` file must be at `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert`

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import json
 from typing import Optional
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -167,25 +166,4 @@ async def add_mercury_controller(
         )
         return f"Mercury controller enrolled successfully: {result}"
     except (RuntimeError, ValueError) as e:
-        return f"Error: {e}"
-
-
-@mcp.tool()
-async def inspect_sdk_api(ctx: Context) -> str:
-    """Inspect the Genetec SDK API to discover available types, methods, and builders.
-
-    This is a diagnostic tool that uses reflection to introspect the loaded SDK
-    assemblies on the C# service. Use this to discover the correct API for
-    adding Mercury controllers and other access control operations.
-
-    Returns:
-        JSON string with SDK type introspection data.
-    """
-    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
-    if not connection.is_connected:
-        return "Error: Not connected to Security Center."
-    try:
-        data = connection.get_sdk_introspection()
-        return json.dumps(data, indent=2)
-    except RuntimeError as e:
         return f"Error: {e}"

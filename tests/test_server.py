@@ -298,68 +298,6 @@ class TestAddMercuryControllerTool:
         assert "SDK failure" in result
 
 
-class TestInspectSdkApiTool:
-    """Tests for the inspect_sdk_api MCP tool."""
-
-    def test_tool_is_registered(self):
-        """inspect_sdk_api should be registered as an MCP tool."""
-        from genetec_mcp_server.server import mcp
-
-        tool_names = list(mcp._tool_manager._tools.keys())
-        assert "inspect_sdk_api" in tool_names
-
-    @pytest.mark.asyncio
-    async def test_returns_error_when_not_connected(self):
-        """Tool should return error message when not connected."""
-        from genetec_mcp_server.server import inspect_sdk_api
-
-        mock_conn = MagicMock()
-        mock_conn.is_connected = False
-
-        mock_ctx = MagicMock()
-        mock_ctx.request_context.lifespan_context.connection = mock_conn
-
-        result = await inspect_sdk_api(mock_ctx)
-        assert "not connected" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_returns_json_on_success(self):
-        """Tool should return JSON introspection data on success."""
-        from genetec_mcp_server.server import inspect_sdk_api
-
-        mock_conn = MagicMock()
-        mock_conn.is_connected = True
-        mock_conn.get_sdk_introspection.return_value = {
-            "relevantTypes": ["MercuryLP1502"],
-            "runtimeManagerMethods": [],
-        }
-
-        mock_ctx = MagicMock()
-        mock_ctx.request_context.lifespan_context.connection = mock_conn
-
-        result = await inspect_sdk_api(mock_ctx)
-        import json
-        parsed = json.loads(result)
-        assert "relevantTypes" in parsed
-        mock_conn.get_sdk_introspection.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_returns_error_on_runtime_error(self):
-        """Tool should return error message on RuntimeError."""
-        from genetec_mcp_server.server import inspect_sdk_api
-
-        mock_conn = MagicMock()
-        mock_conn.is_connected = True
-        mock_conn.get_sdk_introspection.side_effect = RuntimeError("SDK failure")
-
-        mock_ctx = MagicMock()
-        mock_ctx.request_context.lifespan_context.connection = mock_conn
-
-        result = await inspect_sdk_api(mock_ctx)
-        assert "error" in result.lower()
-        assert "SDK failure" in result
-
-
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

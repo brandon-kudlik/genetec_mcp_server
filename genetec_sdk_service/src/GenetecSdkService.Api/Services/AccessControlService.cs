@@ -366,7 +366,7 @@ public class AccessControlService
                     }
 
                     // Configure input settings
-                    if (config.InputContactType != null || config.Debounce != null || config.Shunted != null)
+                    if (config.InputContactType != null || config.Debounce != null || config.Shunted != null || config.Supervised != null)
                     {
                         var settingsProp = deviceType.GetProperty("InputDeviceSettings");
                         if (settingsProp != null)
@@ -391,7 +391,17 @@ public class AccessControlService
                                 {
                                     var debounceProp = settingsType.GetProperty("Debounce");
                                     if (debounceProp != null)
-                                        debounceProp.SetValue(settings, config.Debounce.Value);
+                                    {
+                                        // Debounce throws on system inputs (Tamper, PowerMonitor, etc.)
+                                        try
+                                        {
+                                            debounceProp.SetValue(settings, config.Debounce.Value);
+                                        }
+                                        catch (TargetInvocationException)
+                                        {
+                                            // Skip — this input type does not support debounce
+                                        }
+                                    }
                                 }
 
                                 if (config.Shunted != null)
@@ -399,6 +409,17 @@ public class AccessControlService
                                     var shuntedProp = settingsType.GetProperty("Shunted");
                                     if (shuntedProp != null)
                                         shuntedProp.SetValue(settings, config.Shunted.Value);
+                                }
+
+                                if (config.Supervised != null)
+                                {
+                                    var supervisedProp = settingsType.GetProperty("Supervised");
+                                    if (supervisedProp != null)
+                                    {
+                                        var enumType = supervisedProp.PropertyType;
+                                        var enumValue = Enum.Parse(enumType, config.Supervised);
+                                        supervisedProp.SetValue(settings, enumValue);
+                                    }
                                 }
                             }
                         }

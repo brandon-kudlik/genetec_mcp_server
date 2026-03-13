@@ -96,8 +96,9 @@ public class DeviceConfigItem
     public string DeviceGuid { get; set; } = string.Empty;
     public string? Name { get; set; }
     public string? InputContactType { get; set; }
-    public int? Debounce { get; set; }
+    public double? Debounce { get; set; }
     public bool? Shunted { get; set; }
+    public string? Supervised { get; set; }
     public string? OutputContactType { get; set; }
 }
 

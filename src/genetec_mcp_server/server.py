@@ -259,11 +259,17 @@ async def configure_io_devices(
         device_configs: List of device configurations. Each dict must contain:
             - deviceGuid (str, required): GUID of the device to configure.
             - name (str, optional): New display name for the device.
-            - inputContactType (str, optional): For inputs only. E.g. 'NormallyOpen',
-              'NormallyClosed', 'SupervisedOpen', 'SupervisedClosed'.
-            - debounce (int, optional): For inputs only. Debounce time in ms.
+            - inputContactType (str, optional): For inputs only. Values:
+              'NormallyOpenNotSupervised', 'NormallyClosedNotSupervised',
+              'NormallyOpenSupervised', 'NormallyClosedSupervised',
+              'Custom1', 'Custom2', 'Custom3', 'Custom4'.
+            - debounce (float, optional): For numbered inputs only (not Tamper,
+              PowerMonitor, etc.). Debounce time in ms (e.g. 33.4).
             - shunted (bool, optional): For inputs only.
-            - outputContactType (str, optional): For outputs only.
+            - supervised (str, optional): For inputs only. Values:
+              'E_STATE_NONE', 'E_STATE_3STATE', 'E_STATE_4STATE'.
+            - outputContactType (str, optional): For outputs only. Values:
+              'Normal', 'Inverted'.
 
     Returns:
         A success message or an error description.

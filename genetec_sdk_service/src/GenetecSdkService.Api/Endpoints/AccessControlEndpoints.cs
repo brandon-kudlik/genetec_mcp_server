@@ -74,12 +74,67 @@ public static class AccessControlEndpoints
             }
         });
 
+        app.MapGet("/api/interface-modules/{guid}/devices", (string guid, AccessControlService service) =>
+        {
+            try
+            {
+                var result = service.ListIoDevices(guid);
+                return Results.Ok(ApiResponse<ListIoDevicesResponse>.Ok(result));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ApiResponse<ListIoDevicesResponse>.Fail(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<ListIoDevicesResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<ListIoDevicesResponse>.Fail(ex.Message));
+            }
+        });
+
+        app.MapPost("/api/interface-modules/{guid}/devices/configure", (string guid, ConfigureIoDevicesRequest request, AccessControlService service) =>
+        {
+            try
+            {
+                var result = service.ConfigureIoDevices(guid, request);
+                return Results.Ok(ApiResponse<ConfigureIoDevicesResponse>.Ok(result));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ApiResponse<ConfigureIoDevicesResponse>.Fail(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<ConfigureIoDevicesResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<ConfigureIoDevicesResponse>.Fail(ex.Message));
+            }
+        });
+
         app.MapGet("/api/debug/builder-methods/{unitGuid}", (string unitGuid, AccessControlService service) =>
         {
             try
             {
                 var methods = service.InspectBuilderMethods(unitGuid);
                 return Results.Ok(ApiResponse<List<string>>.Ok(methods));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<List<string>>.Fail(ex.InnerException?.Message ?? ex.Message));
+            }
+        });
+
+        app.MapGet("/api/debug/interface-module-info/{guid}", (string guid, AccessControlService service) =>
+        {
+            try
+            {
+                var info = service.InspectInterfaceModuleDevices(guid);
+                return Results.Ok(ApiResponse<List<string>>.Ok(info));
             }
             catch (Exception ex)
             {

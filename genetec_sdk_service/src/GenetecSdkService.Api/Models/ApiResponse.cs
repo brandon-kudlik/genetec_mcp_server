@@ -76,3 +76,38 @@ public class InterfaceModuleResponse
 {
     public string Message { get; set; } = string.Empty;
 }
+
+public class IoDeviceInfo
+{
+    public string Guid { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string PhysicalName { get; set; } = string.Empty;
+    public string DeviceType { get; set; } = string.Empty;
+    public bool IsOnline { get; set; }
+}
+
+public class ListIoDevicesResponse
+{
+    public List<IoDeviceInfo> Devices { get; set; } = new();
+}
+
+public class DeviceConfigItem
+{
+    public string DeviceGuid { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string? InputContactType { get; set; }
+    public int? Debounce { get; set; }
+    public bool? Shunted { get; set; }
+    public string? OutputContactType { get; set; }
+}
+
+public class ConfigureIoDevicesRequest
+{
+    public List<DeviceConfigItem> DeviceConfigs { get; set; } = new();
+}
+
+public class ConfigureIoDevicesResponse
+{
+    public string Message { get; set; } = string.Empty;
+    public int ConfiguredCount { get; set; }
+}

@@ -254,6 +254,58 @@ class GenetecConnection:
         })
         return data["message"]
 
+    def list_io_devices(self, interface_module_guid: str) -> list[dict[str, Any]]:
+        """List IO devices on an interface module.
+
+        Args:
+            interface_module_guid: GUID of the interface module.
+
+        Returns:
+            List of device dicts with guid, name, physicalName, deviceType, isOnline.
+
+        Raises:
+            ValueError: If interface_module_guid is empty.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not interface_module_guid:
+            raise ValueError("interface_module_guid is required and cannot be empty.")
+
+        data = self._get(f"/api/interface-modules/{interface_module_guid}/devices")
+        return data.get("devices", [])
+
+    def configure_io_devices(
+        self,
+        interface_module_guid: str,
+        device_configs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Configure IO devices on an interface module.
+
+        Args:
+            interface_module_guid: GUID of the interface module.
+            device_configs: List of device configuration dicts. Each must contain
+                'deviceGuid' and optionally 'name', 'inputContactType', 'debounce',
+                'shunted', 'outputContactType'.
+
+        Returns:
+            Response dict with message and configuredCount.
+
+        Raises:
+            ValueError: If parameters are invalid.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not interface_module_guid:
+            raise ValueError("interface_module_guid is required and cannot be empty.")
+        if not device_configs:
+            raise ValueError("device_configs is required and cannot be empty.")
+        for config in device_configs:
+            if not config.get("deviceGuid"):
+                raise ValueError("Each device config must contain a 'deviceGuid'.")
+
+        return self._post(
+            f"/api/interface-modules/{interface_module_guid}/devices/configure",
+            {"deviceConfigs": device_configs},
+        )
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -207,5 +207,75 @@ async def add_interface_module(
             address=address,
         )
         return f"Interface module added successfully: {result}"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def list_io_devices(ctx: Context, interface_module_guid: str) -> str:
+    """List all IO devices (inputs, outputs, readers) on an interface module.
+
+    Use this to discover devices on an interface board after adding it to a
+    Mercury controller. Returns device GUIDs needed for configure_io_devices.
+
+    Args:
+        interface_module_guid: GUID of the interface module to query.
+
+    Returns:
+        A formatted list of devices with their GUIDs, names, types, and status.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        devices = connection.list_io_devices(interface_module_guid=interface_module_guid)
+        if not devices:
+            return f"No devices found on interface module {interface_module_guid}."
+        lines = [f"Found {len(devices)} device(s) on interface module {interface_module_guid}:\n"]
+        for d in devices:
+            status = "Online" if d.get("isOnline") else "Offline"
+            lines.append(
+                f"- {d.get('deviceType', 'Unknown')} | {d.get('name', 'Unnamed')} "
+                f"({d.get('physicalName', '')}) | GUID: {d.get('guid', '')} | {status}"
+            )
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def configure_io_devices(
+    ctx: Context,
+    interface_module_guid: str,
+    device_configs: list[dict[str, Any]],
+) -> str:
+    """Configure IO devices (name, input/output settings) on an interface module.
+
+    Applies all changes in a single transaction. Use list_io_devices first to
+    discover device GUIDs.
+
+    Args:
+        interface_module_guid: GUID of the interface module.
+        device_configs: List of device configurations. Each dict must contain:
+            - deviceGuid (str, required): GUID of the device to configure.
+            - name (str, optional): New display name for the device.
+            - inputContactType (str, optional): For inputs only. E.g. 'NormallyOpen',
+              'NormallyClosed', 'SupervisedOpen', 'SupervisedClosed'.
+            - debounce (int, optional): For inputs only. Debounce time in ms.
+            - shunted (bool, optional): For inputs only.
+            - outputContactType (str, optional): For outputs only.
+
+    Returns:
+        A success message or an error description.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.configure_io_devices(
+            interface_module_guid=interface_module_guid,
+            device_configs=device_configs,
+        )
+        return f"Configured {result.get('configuredCount', 0)} device(s): {result.get('message', 'OK')}"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"

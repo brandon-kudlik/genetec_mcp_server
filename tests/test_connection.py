@@ -329,3 +329,125 @@ class TestAddInterfaceModule:
                 board_type="",
             )
         conn.dispose()
+
+
+class TestListIoDevices:
+    """Tests for listing IO devices on an interface module."""
+
+    def test_returns_devices_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"devices": [
+                    {"guid": "dev-guid-1", "name": "Input 1", "physicalName": "In1", "deviceType": "Input", "isOnline": True},
+                    {"guid": "dev-guid-2", "name": "Output 1", "physicalName": "Out1", "deviceType": "Output", "isOnline": False},
+                ]}}
+            )
+            result = conn.list_io_devices(interface_module_guid="im-guid-1")
+        assert len(result) == 2
+        assert result[0]["guid"] == "dev-guid-1"
+        assert result[1]["deviceType"] == "Output"
+        conn.dispose()
+
+    def test_requires_interface_module_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="interface_module_guid"):
+            conn.list_io_devices(interface_module_guid="")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Entity not found."}
+            )
+            with pytest.raises(RuntimeError, match="Entity not found"):
+                conn.list_io_devices(interface_module_guid="im-guid-1")
+        conn.dispose()
+
+    def test_calls_correct_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"devices": []}}
+            )
+            conn.list_io_devices(interface_module_guid="im-guid-1")
+            mock_get.assert_called_once_with("/api/interface-modules/im-guid-1/devices")
+        conn.dispose()
+
+
+class TestConfigureIoDevices:
+    """Tests for configuring IO devices on an interface module."""
+
+    def test_returns_result_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"message": "Configured 2 devices.", "configuredCount": 2}}
+            )
+            result = conn.configure_io_devices(
+                interface_module_guid="im-guid-1",
+                device_configs=[{"deviceGuid": "dev-1", "name": "Input 1"}],
+            )
+        assert result["configuredCount"] == 2
+        conn.dispose()
+
+    def test_requires_interface_module_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="interface_module_guid"):
+            conn.configure_io_devices(
+                interface_module_guid="",
+                device_configs=[{"deviceGuid": "dev-1"}],
+            )
+        conn.dispose()
+
+    def test_requires_non_empty_device_configs(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="device_configs"):
+            conn.configure_io_devices(
+                interface_module_guid="im-guid-1",
+                device_configs=[],
+            )
+        conn.dispose()
+
+    def test_requires_device_guid_in_each_config(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="deviceGuid"):
+            conn.configure_io_devices(
+                interface_module_guid="im-guid-1",
+                device_configs=[{"name": "Input 1"}],
+            )
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"message": "OK", "configuredCount": 1}}
+            )
+            configs = [{"deviceGuid": "dev-1", "name": "Input 1", "inputContactType": "NormallyOpen"}]
+            conn.configure_io_devices(
+                interface_module_guid="im-guid-1",
+                device_configs=configs,
+            )
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body["deviceConfigs"] == configs
+            mock_post.assert_called_once_with(
+                "/api/interface-modules/im-guid-1/devices/configure",
+                json={"deviceConfigs": configs},
+            )
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Device not found."}
+            )
+            with pytest.raises(RuntimeError, match="Device not found"):
+                conn.configure_io_devices(
+                    interface_module_guid="im-guid-1",
+                    device_configs=[{"deviceGuid": "dev-1"}],
+                )
+        conn.dispose()

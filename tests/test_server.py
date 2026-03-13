@@ -381,6 +381,151 @@ class TestAddInterfaceModuleTool:
         assert "SDK failure" in result
 
 
+class TestListIoDevicesTool:
+    """Tests for the list_io_devices MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "list_io_devices" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import list_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await list_io_devices(mock_ctx, interface_module_guid="im-guid-1")
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_formatted_device_list(self):
+        from genetec_mcp_server.server import list_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.list_io_devices.return_value = [
+            {"guid": "dev-1", "name": "Input 1", "physicalName": "In1", "deviceType": "Input", "isOnline": True},
+            {"guid": "dev-2", "name": "Reader 1", "physicalName": "Rdr1", "deviceType": "Reader", "isOnline": False},
+        ]
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await list_io_devices(mock_ctx, interface_module_guid="im-guid-1")
+        assert "dev-1" in result
+        assert "Input 1" in result
+        assert "Input" in result
+        assert "dev-2" in result
+        assert "Reader" in result
+        mock_conn.list_io_devices.assert_called_once_with(interface_module_guid="im-guid-1")
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import list_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.list_io_devices.side_effect = RuntimeError("Entity not found")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await list_io_devices(mock_ctx, interface_module_guid="im-guid-1")
+        assert "error" in result.lower()
+        assert "Entity not found" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_no_devices_message(self):
+        from genetec_mcp_server.server import list_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.list_io_devices.return_value = []
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await list_io_devices(mock_ctx, interface_module_guid="im-guid-1")
+        assert "no devices" in result.lower() or "0" in result
+
+
+class TestConfigureIoDevicesTool:
+    """Tests for the configure_io_devices MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "configure_io_devices" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import configure_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_io_devices(
+            mock_ctx,
+            interface_module_guid="im-guid-1",
+            device_configs=[{"deviceGuid": "dev-1", "name": "Input 1"}],
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_success_message(self):
+        from genetec_mcp_server.server import configure_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.configure_io_devices.return_value = {
+            "message": "Configured 2 devices.",
+            "configuredCount": 2,
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_io_devices(
+            mock_ctx,
+            interface_module_guid="im-guid-1",
+            device_configs=[{"deviceGuid": "dev-1", "name": "Input 1"}],
+        )
+        assert "configured" in result.lower()
+        mock_conn.configure_io_devices.assert_called_once_with(
+            interface_module_guid="im-guid-1",
+            device_configs=[{"deviceGuid": "dev-1", "name": "Input 1"}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import configure_io_devices
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.configure_io_devices.side_effect = RuntimeError("Transaction failed")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await configure_io_devices(
+            mock_ctx,
+            interface_module_guid="im-guid-1",
+            device_configs=[{"deviceGuid": "dev-1"}],
+        )
+        assert "error" in result.lower()
+        assert "Transaction failed" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

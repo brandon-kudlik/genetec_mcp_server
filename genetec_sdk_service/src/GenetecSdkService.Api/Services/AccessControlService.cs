@@ -55,20 +55,24 @@ public class AccessControlService
 
         var tcs = new TaskCompletionSource<string>();
 
-        // UnitEnrollmentFailed uses AddUnitProgressEventArgs (per SDK delegate signature)
-        void OnSuccess(object? sender, EventArgs e)
+        // Use EventHandler<EventArgs> for success, and dynamic event wiring
+        // for the failed event since AddUnitProgressEventArgs lives in an
+        // SDK namespace not directly importable from our assembly reference.
+        EventHandler<EventArgs> onSuccess = (sender, e) =>
         {
             tcs.TrySetResult("success");
-        }
+        };
 
-        void OnFailed(object? sender, AddUnitProgressEventArgs e)
+        // Wire the failed event via dynamic to avoid needing the exact EventArgs type
+        dynamic mgr = engine.AccessControlUnitManager;
+        mgr.UnitEnrollmentSucceeded += onSuccess;
+
+        // Use a lambda that accepts dynamic args to sidestep the type resolution
+        EventHandler<dynamic> onFailed = (sender, e) =>
         {
             tcs.TrySetResult($"failed:{e.ActionDetails}");
-        }
-
-        var mgr = engine.AccessControlUnitManager;
-        mgr.UnitEnrollmentSucceeded += OnSuccess;
-        mgr.UnitEnrollmentFailed += OnFailed;
+        };
+        mgr.UnitEnrollmentFailed += onFailed;
 
         try
         {
@@ -88,8 +92,8 @@ public class AccessControlService
         }
         finally
         {
-            mgr.UnitEnrollmentSucceeded -= OnSuccess;
-            mgr.UnitEnrollmentFailed -= OnFailed;
+            mgr.UnitEnrollmentSucceeded -= onSuccess;
+            mgr.UnitEnrollmentFailed -= onFailed;
         }
     }
 

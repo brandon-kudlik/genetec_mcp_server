@@ -109,7 +109,7 @@ Follow strict red/green TDD for all new features:
 | POST | `/api/cardholders` | Create cardholder |
 | POST | `/api/units/cloudlink` | Enroll Cloudlink unit |
 | POST | `/api/units/{guid}/mercury` | Add Mercury sub-controller |
-| POST | `/api/units/{guid}/interface-modules` | Add interface board to Mercury controller |
+| POST | `/api/units/{guid}/controllers/{guid}/interface-modules` | Add interface board to Mercury controller |
 
 ### Entity Hierarchy
 ```

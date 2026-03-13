@@ -166,8 +166,10 @@ public class AccessControlService
         "M516Do", "M516Dor", "M520In", "M52K", "M52RP", "M52SRP", "M58RP",
     };
 
-    public InterfaceModuleResponse AddInterfaceModule(string controllerGuid, InterfaceModuleRequest request)
+    public InterfaceModuleResponse AddInterfaceModule(string unitGuid, string controllerGuid, InterfaceModuleRequest request)
     {
+        if (string.IsNullOrWhiteSpace(unitGuid))
+            throw new ArgumentException("unitGuid is required and cannot be empty.");
         if (string.IsNullOrWhiteSpace(controllerGuid))
             throw new ArgumentException("controllerGuid is required and cannot be empty.");
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -183,9 +185,10 @@ public class AccessControlService
         try
         {
             var engine = _engineService.Engine;
-            var parentGuid = Guid.Parse(controllerGuid);
+            var parentUnitGuid = Guid.Parse(unitGuid);
+            var parentControllerGuid = Guid.Parse(controllerGuid);
 
-            // Resolve interface board class by name via reflection (e.g. MercuryMR50)
+            // Resolve interface board class by name via reflection (e.g. MercuryMR52)
             var boardClassName = $"Mercury{request.BoardType}";
             var boardType = FindTypeByName(boardClassName)
                 ?? throw new InvalidOperationException($"Could not find type {boardClassName} in loaded assemblies.");
@@ -198,24 +201,24 @@ public class AccessControlService
             if (addressProp != null)
                 addressProp.SetValue(boardInterface, request.Address);
 
-            // Get the builder via the SDK accessor method using reflection
+            // Get the builder from the Cloudlink unit (must be a Unit, not InterfaceModule)
             var entityManager = engine.EntityManager;
             var emType = ((object)entityManager).GetType();
             var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
                 ?? throw new InvalidOperationException(
                     "Could not find GetAccessControlInterfacePeripheralsBuilder on EntityManager.");
 
-            var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
+            var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentUnitGuid })
                 ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
 
-            // All SDK builder calls must use reflection
+            // Use AddAccessControlChildInterface(name, interface, parentGuid) to add
+            // the board under the Mercury controller, not directly under the unit
             var builderType = builderObj.GetType();
 
-            var addMethod = builderType.GetMethod("AddAccessControlBusInterface")
+            var addChildMethod = builderType.GetMethod("AddAccessControlChildInterface")
                 ?? throw new InvalidOperationException(
-                    $"Could not find AddAccessControlBusInterface on {builderType.Name}. " +
-                    $"Available methods: {string.Join(", ", builderType.GetMethods().Select(m => m.Name).Distinct())}");
-            addMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface });
+                    $"Could not find AddAccessControlChildInterface on {builderType.Name}.");
+            addChildMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface, parentControllerGuid });
 
             var buildMethod = builderType.GetMethod("Build")
                 ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");

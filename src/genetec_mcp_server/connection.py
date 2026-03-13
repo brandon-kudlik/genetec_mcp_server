@@ -211,6 +211,7 @@ class GenetecConnection:
 
     def add_interface_module(
         self,
+        unit_guid: str,
         controller_guid: str,
         name: str,
         board_type: str,
@@ -219,9 +220,10 @@ class GenetecConnection:
         """Add an interface module (MR50, MR52, etc.) to a Mercury controller.
 
         Args:
+            unit_guid: GUID of the parent Cloudlink unit.
             controller_guid: GUID of the parent Mercury controller.
             name: Display name for the interface board.
-            board_type: Board model (e.g. 'MR50', 'MR52', 'MR16IN', 'MR16OUT').
+            board_type: Board model (e.g. 'MR50', 'MR52', 'MR16In', 'MR16Out').
             address: SIO bus address (default 0).
 
         Returns:
@@ -231,6 +233,8 @@ class GenetecConnection:
             ValueError: If any required parameter is empty or type is invalid.
             RuntimeError: If the SDK service returns an error.
         """
+        if not unit_guid:
+            raise ValueError("unit_guid is required and cannot be empty.")
         if not controller_guid:
             raise ValueError("controller_guid is required and cannot be empty.")
         if not name:
@@ -243,7 +247,7 @@ class GenetecConnection:
                 f"Valid types: {sorted(self.INTERFACE_BOARD_TYPES)}"
             )
 
-        data = self._post(f"/api/units/{controller_guid}/interface-modules", {
+        data = self._post(f"/api/units/{unit_guid}/controllers/{controller_guid}/interface-modules", {
             "name": name,
             "boardType": board_type,
             "address": address,

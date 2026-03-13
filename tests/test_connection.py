@@ -267,17 +267,30 @@ class TestAddInterfaceModule:
                 {"success": True, "data": {"message": "MR50 'Board-01' added to controller"}}
             )
             result = conn.add_interface_module(
-                controller_guid="00000000-0000-0000-0000-000000000001",
+                unit_guid="00000000-0000-0000-0000-000000000001",
+                controller_guid="00000000-0000-0000-0000-000000000002",
                 name="Board-01",
                 board_type="MR50",
             )
         assert "Board-01" in result
         conn.dispose()
 
+    def test_requires_unit_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="unit_guid"):
+            conn.add_interface_module(
+                unit_guid="",
+                controller_guid="00000000-0000-0000-0000-000000000002",
+                name="Board-01",
+                board_type="MR50",
+            )
+        conn.dispose()
+
     def test_requires_controller_guid(self):
         conn = GenetecConnection(base_url="http://localhost:5100")
         with pytest.raises(ValueError, match="controller_guid"):
             conn.add_interface_module(
+                unit_guid="00000000-0000-0000-0000-000000000001",
                 controller_guid="",
                 name="Board-01",
                 board_type="MR50",
@@ -288,7 +301,8 @@ class TestAddInterfaceModule:
         conn = GenetecConnection(base_url="http://localhost:5100")
         with pytest.raises(ValueError, match="name"):
             conn.add_interface_module(
-                controller_guid="00000000-0000-0000-0000-000000000001",
+                unit_guid="00000000-0000-0000-0000-000000000001",
+                controller_guid="00000000-0000-0000-0000-000000000002",
                 name="",
                 board_type="MR50",
             )
@@ -298,7 +312,8 @@ class TestAddInterfaceModule:
         conn = GenetecConnection(base_url="http://localhost:5100")
         with pytest.raises(ValueError, match="Unknown board_type"):
             conn.add_interface_module(
-                controller_guid="00000000-0000-0000-0000-000000000001",
+                unit_guid="00000000-0000-0000-0000-000000000001",
+                controller_guid="00000000-0000-0000-0000-000000000002",
                 name="Board-01",
                 board_type="InvalidBoard",
             )
@@ -308,7 +323,8 @@ class TestAddInterfaceModule:
         conn = GenetecConnection(base_url="http://localhost:5100")
         with pytest.raises(ValueError, match="board_type"):
             conn.add_interface_module(
-                controller_guid="00000000-0000-0000-0000-000000000001",
+                unit_guid="00000000-0000-0000-0000-000000000001",
+                controller_guid="00000000-0000-0000-0000-000000000002",
                 name="Board-01",
                 board_type="",
             )

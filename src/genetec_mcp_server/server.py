@@ -172,6 +172,7 @@ async def add_mercury_controller(
 @mcp.tool()
 async def add_interface_module(
     ctx: Context,
+    unit_guid: str,
     controller_guid: str,
     name: str,
     board_type: str,
@@ -183,6 +184,7 @@ async def add_interface_module(
     hierarchy is: Cloudlink Unit → Mercury Controller → Interface Board.
 
     Args:
+        unit_guid: GUID of the parent Cloudlink unit.
         controller_guid: GUID of the parent Mercury controller.
         name: Display name for the interface board.
         board_type: Board model. Valid types: MR50, MR51e, MR52, MR62e, MR16In,
@@ -198,6 +200,7 @@ async def add_interface_module(
         return "Error: Not connected to Security Center."
     try:
         result = connection.add_interface_module(
+            unit_guid=unit_guid,
             controller_guid=controller_guid,
             name=name,
             board_type=board_type,

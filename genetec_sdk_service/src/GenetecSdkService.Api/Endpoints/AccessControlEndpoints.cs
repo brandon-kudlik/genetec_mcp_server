@@ -53,11 +53,11 @@ public static class AccessControlEndpoints
             }
         });
 
-        app.MapPost("/api/units/{controllerGuid}/interface-modules", (string controllerGuid, InterfaceModuleRequest request, AccessControlService service) =>
+        app.MapPost("/api/units/{unitGuid}/controllers/{controllerGuid}/interface-modules", (string unitGuid, string controllerGuid, InterfaceModuleRequest request, AccessControlService service) =>
         {
             try
             {
-                var result = service.AddInterfaceModule(controllerGuid, request);
+                var result = service.AddInterfaceModule(unitGuid, controllerGuid, request);
                 return Results.Ok(ApiResponse<InterfaceModuleResponse>.Ok(result));
             }
             catch (ArgumentException ex)

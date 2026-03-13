@@ -321,7 +321,8 @@ class TestAddInterfaceModuleTool:
 
         result = await add_interface_module(
             mock_ctx,
-            controller_guid="00000000-0000-0000-0000-000000000001",
+            unit_guid="00000000-0000-0000-0000-000000000001",
+            controller_guid="00000000-0000-0000-0000-000000000002",
             name="Board-01",
             board_type="MR50",
         )
@@ -335,7 +336,7 @@ class TestAddInterfaceModuleTool:
         mock_conn = MagicMock()
         mock_conn.is_connected = True
         mock_conn.add_interface_module.return_value = (
-            "MR50 'Board-01' added to controller 00000000-0000-0000-0000-000000000001"
+            "MR50 'Board-01' added to controller 00000000-0000-0000-0000-000000000002"
         )
 
         mock_ctx = MagicMock()
@@ -343,13 +344,15 @@ class TestAddInterfaceModuleTool:
 
         result = await add_interface_module(
             mock_ctx,
-            controller_guid="00000000-0000-0000-0000-000000000001",
+            unit_guid="00000000-0000-0000-0000-000000000001",
+            controller_guid="00000000-0000-0000-0000-000000000002",
             name="Board-01",
             board_type="MR50",
         )
         assert "Board-01" in result
         mock_conn.add_interface_module.assert_called_once_with(
-            controller_guid="00000000-0000-0000-0000-000000000001",
+            unit_guid="00000000-0000-0000-0000-000000000001",
+            controller_guid="00000000-0000-0000-0000-000000000002",
             name="Board-01",
             board_type="MR50",
             address=0,
@@ -369,7 +372,8 @@ class TestAddInterfaceModuleTool:
 
         result = await add_interface_module(
             mock_ctx,
-            controller_guid="00000000-0000-0000-0000-000000000001",
+            unit_guid="00000000-0000-0000-0000-000000000001",
+            controller_guid="00000000-0000-0000-0000-000000000002",
             name="Board-01",
             board_type="MR50",
         )

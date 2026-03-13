@@ -51,7 +51,8 @@ public static class DiagnosticEndpoints
                         }
 
                         // AccessControlInterfacePeripheralsBuilder details
-                        if (t.Name == "AccessControlInterfacePeripheralsBuilder")
+                        if (t.Name == "AccessControlInterfacePeripheralsBuilder"
+                            && !result.BuilderDetails.ContainsKey($"{fullName}:constructors"))
                         {
                             var ctors = t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                                 .Select(c => $"({string.Join(", ", c.GetParameters().Select(p => $"{p.ParameterType.FullName} {p.Name}"))})");
@@ -61,23 +62,22 @@ public static class DiagnosticEndpoints
                             var properties = t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                                 .Select(p => $"{p.PropertyType.Name} {p.Name} {{ {(p.CanRead ? "get; " : "")}{(p.CanWrite ? "set; " : "")}}}");
 
-                            result.BuilderDetails.Add("constructors", ctors.ToList());
-                            result.BuilderDetails.Add("methods", methods.ToList());
-                            result.BuilderDetails.Add("properties", properties.ToList());
-                            result.BuilderDetails.Add("fullName", new List<string> { fullName });
-                            result.BuilderDetails.Add("baseType", new List<string> { t.BaseType?.FullName ?? "none" });
+                            result.BuilderDetails[$"{fullName}:constructors"] = ctors.ToList();
+                            result.BuilderDetails[$"{fullName}:methods"] = methods.ToList();
+                            result.BuilderDetails[$"{fullName}:properties"] = properties.ToList();
+                            result.BuilderDetails[$"{fullName}:baseType"] = new List<string> { t.BaseType?.FullName ?? "none" };
                         }
 
                         // Unit entity methods related to peripherals/interface modules
-                        if (t.Name == "Unit" && t.Namespace?.Contains("Genetec") == true)
+                        if (t.Name == "Unit" && t.Namespace?.Contains("Genetec") == true
+                            && !result.UnitEntityInfo.ContainsKey($"{fullName}:methods"))
                         {
                             var methods = t.GetMethods(BindingFlags.Public | BindingFlags.Instance)
                                 .Select(m => $"{m.ReturnType.Name} {m.Name}({string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"))})");
                             var properties = t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                                 .Select(p => $"{p.PropertyType.Name} {p.Name}");
-                            result.UnitEntityInfo.Add("methods", methods.ToList());
-                            result.UnitEntityInfo.Add("properties", properties.ToList());
-                            result.UnitEntityInfo.Add("fullName", new List<string> { fullName });
+                            result.UnitEntityInfo[$"{fullName}:methods"] = methods.ToList();
+                            result.UnitEntityInfo[$"{fullName}:properties"] = properties.ToList();
                         }
 
                         // Scan for types containing relevant keywords

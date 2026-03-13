@@ -84,7 +84,9 @@ Follow strict red/green TDD for all new features:
 ### C# SDK Service
 - `GenetecEngineService` implements `IHostedService` — connects on startup, disconnects on shutdown
 - Engine lifecycle: create → set certificate → register TLS handler → `BeginLogOn` + `TaskCompletionSource`
-- Assembly resolver registered for SDK's 150+ transitive dependencies
+- **Assembly resolver MUST be registered in `Program.cs` before any DI/hosted service code** — the runtime loads `Genetec.Sdk.dll` at JIT time when it first encounters `Engine`, so registering inside `StartAsync` is too late
+- **`<UseWPF>true</UseWPF>` required in `.csproj`** — the SDK's `Engine` constructor depends on `System.Windows.Threading.Dispatcher` from `WindowsBase.dll` even in non-UI apps
+- **Use `dynamic` for SDK entity/query objects** — `CreateEntity`/`GetEntity` return base `Entity`, `CreateReportQuery` returns base `ReportQuery`; subclass properties (`FirstName`, `Version`, `EntityTypeFilter`) are only accessible via `dynamic` or explicit casts to types that may live in unreferenced assemblies
 - AppDomain key `GENETEC_GCONFIG_PATH_5_13` set for Engine constructor
 - SDK certificate (dev): `KxsD11z743Hf5Gq9mv3+5ekxzemlCiUXkTFY5ba1NOGcLCmGstt2n0zYE9NsNimv`
 - `.cert` file must be at `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert`

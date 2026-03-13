@@ -1059,6 +1059,8 @@ Get-Content .\logs\stdout.log -Tail 30
 | Symptom | Root Cause | Fix |
 |---|---|---|
 | SDK Service fails to start | Missing .NET runtime or SDK DLLs | Check `C:\mcp\genetec_sdk_service_publish\logs\stderr.log`; verify self-contained publish included the runtime |
+| `FileNotFoundException: Genetec.Sdk` on startup | Assembly resolver not running early enough | The resolver must be in `Program.cs` before any DI or hosted service code — already handled in the current codebase. If modifying Program.cs, ensure the resolver registration stays at the top before `WebApplication.CreateBuilder()` |
+| `TypeLoadException: System.Windows.Threading.Dispatcher` | Missing WPF/WindowsBase framework | The `.csproj` must include `<UseWPF>true</UseWPF>` — the Genetec SDK's Engine constructor depends on WindowsBase even in non-UI apps. Already set in the current codebase |
 | `http://localhost:5100/api/health` returns `isConnected: false` | SDK connection failed (credentials, certificate, NuGet DLL) | Check C# service logs; run Step 1d DLL verification; verify `appsettings.json` values |
 | Generic `Failed` login in C# logs — same error with correct and wrong credentials | Missing NuGet DLL in SDK directory (pre-auth failure) | Run Step 1d verification script; most commonly `Microsoft.Extensions.Caching.Abstractions.dll` is missing |
 | SDK cert file not found at runtime | `Genetec.Sdk.Engine.cert` missing from `<SDK_PATH>/certificates/` | Copy `Certificates/python.exe.cert` to `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` (see Step 1e) |

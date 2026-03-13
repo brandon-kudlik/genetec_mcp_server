@@ -1,210 +1,75 @@
-"""Manage connection to Genetec Security Center."""
+"""HTTP client for the Genetec SDK Service."""
 
 from __future__ import annotations
 
-import threading
-from typing import Optional
+from typing import Any, Optional
 
-from genetec_mcp_server.config import CLIENT_CERTIFICATE, PASSWORD, SERVER, USERNAME
-from genetec_mcp_server.sdk_loader import load_sdk
+import httpx
+
+from genetec_mcp_server.config import SDK_SERVICE_URL
 
 
 class GenetecConnection:
-    """Manages an SDK Engine connection to Security Center.
+    """HTTP client that communicates with the C# Genetec SDK Service.
 
-    Handles Engine lifecycle, certificate configuration, directory
-    certificate validation, and login/logout operations.
+    Replaces the previous pythonnet-based connection with REST calls
+    to the C# SDK service running on localhost.
     """
 
-    def __init__(
-        self,
-        client_certificate: Optional[str] = None,
-    ) -> None:
-        load_sdk()
-
-        from Genetec.Sdk import Engine  # type: ignore[import-untyped]
-
-        self._engine = Engine()
+    def __init__(self, base_url: Optional[str] = None) -> None:
+        self._base_url = (base_url or SDK_SERVICE_URL).rstrip("/")
+        self._client = httpx.Client(base_url=self._base_url, timeout=60.0)
+        self._connected: Optional[bool] = None
         self._last_failure: Optional[str] = None
-        self._type_cache: dict[str, type] = {}
-
-        # Set SDK client certificate for authentication
-        cert = client_certificate or CLIENT_CERTIFICATE
-        if cert:
-            self._engine.ClientCertificate = cert
-
-        # Auto-accept directory TLS certificates (Security Center 5.4+)
-        self._engine.LoginManager.RequestDirectoryCertificateValidation += (
-            self._on_directory_certificate_validation
-        )
-
-    @staticmethod
-    def _on_directory_certificate_validation(sender, e) -> None:  # type: ignore[no-untyped-def]
-        """Accept the directory server's TLS certificate."""
-        e.AcceptDirectory = True
-
-    def _import_type(self, type_name: str):  # type: ignore[no-untyped-def]
-        """Resolve an SDK type by name via reflection, then import it.
-
-        Uses assembly scanning to find the type's namespace, then imports
-        via pythonnet. Results are cached for subsequent lookups.
-
-        Args:
-            type_name: Simple name of the .NET type (e.g. 'AccessControlExtensionType').
-
-        Returns:
-            The resolved Python-wrapped .NET type.
-
-        Raises:
-            RuntimeError: If the type cannot be found in any loaded assembly.
-        """
-        if type_name in self._type_cache:
-            return self._type_cache[type_name]
-
-        import System  # type: ignore[import-untyped]
-
-        for asm in System.AppDomain.CurrentDomain.GetAssemblies():
-            for t in asm.GetTypes():
-                if t.Name == type_name:
-                    namespace = t.Namespace
-                    try:
-                        module = __import__(namespace, fromlist=[type_name])
-                        resolved = getattr(module, type_name)
-                    except (AttributeError, ImportError):
-                        # Some SDK types can't be imported via pythonnet's
-                        # namespace mechanism. Fall back to a wrapper that
-                        # invokes the constructor via reflection to preserve
-                        # parameter type matching.
-                        net_type = t
-
-                        def _make_factory(nt):  # type: ignore[no-untyped-def]
-                            def factory(*args):  # type: ignore[no-untyped-def]
-                                if not args:
-                                    return System.Activator.CreateInstance(nt)
-                                # Match constructor by parameter count, then
-                                # invoke directly to let .NET resolve types.
-                                for ctor in nt.GetConstructors():
-                                    params = ctor.GetParameters()
-                                    if len(params) == len(args):
-                                        from System import Array, Object  # type: ignore[import-untyped]
-
-                                        clr_args = Array[Object](list(args))
-                                        return ctor.Invoke(clr_args)
-                                raise RuntimeError(
-                                    f"No constructor on {nt.Name} with "
-                                    f"{len(args)} parameter(s)."
-                                )
-                            return factory
-
-                        resolved = _make_factory(net_type)
-                    self._type_cache[type_name] = resolved
-                    return resolved
-        raise RuntimeError(
-            f"Could not find {type_name} in loaded SDK assemblies."
-        )
-
-    @property
-    def engine(self):  # type: ignore[no-untyped-def]
-        """Get the underlying SDK Engine instance."""
-        return self._engine
 
     @property
     def is_connected(self) -> bool:
-        """Check if connected to Security Center."""
-        return bool(self._engine.IsConnected)
+        """Check if the SDK service is connected to Security Center."""
+        if self._connected is not None:
+            return self._connected
+        try:
+            data = self._get("/api/health")
+            self._connected = data.get("isConnected", False)
+            return self._connected
+        except Exception:
+            return False
 
     @property
     def last_failure(self) -> Optional[str]:
         """Get the last connection failure message, if any."""
         return self._last_failure
 
-    def connect(
-        self,
-        server: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        timeout: float = 30.0,
-    ) -> str:
-        """Connect to Security Center.
-
-        Uses BeginLogOn with event callbacks to avoid the deadlock that
-        occurs when calling LogOnAsync().Result from Python's main thread.
-
-        Args:
-            server: Directory server address. Defaults to config.
-            username: Username. Defaults to config. Empty = Windows auth.
-            password: Password. Defaults to config.
-            timeout: Max seconds to wait for connection. Default 30.
+    def connect(self) -> str:
+        """Check connection status via the SDK service health endpoint.
 
         Returns:
-            "Success" if connected, or the failure code/message.
+            "Success" if the SDK service is connected, or an error string.
         """
-        server = server or SERVER
-        username = username or USERNAME
-        password = password or PASSWORD
-
-        login_manager = self._engine.LoginManager
-        login_manager.ConnectionRetry = 1
-
-        done = threading.Event()
-        result_holder: list[str] = []
-
-        def on_logged_on(sender, e):  # type: ignore[no-untyped-def]
-            self._last_failure = None
-            result_holder.append("Success")
-            done.set()
-
-        def on_failed(sender, e):  # type: ignore[no-untyped-def]
-            msg = str(e.FormattedErrorMessage)
-            self._last_failure = msg
-            result_holder.append(str(e.FailureCode))
-            done.set()
-
-        login_manager.LoggedOn += on_logged_on
-        login_manager.LogonFailed += on_failed
-
         try:
-            if username:
-                login_manager.BeginLogOn(server, username, password)
-            else:
-                login_manager.BeginLogOnUsingWindowsCredential(server)
-
-            if done.wait(timeout=timeout):
-                return result_holder[0] if result_holder else "Unknown"
-            return "Timeout"
-        finally:
-            login_manager.LoggedOn -= on_logged_on
-            login_manager.LogonFailed -= on_failed
+            data = self._get("/api/health")
+            if data.get("isConnected"):
+                self._connected = True
+                self._last_failure = None
+                return "Success"
+            self._connected = False
+            self._last_failure = "SDK service not connected to Security Center."
+            return "Failed"
+        except Exception as e:
+            self._connected = False
+            self._last_failure = str(e)
+            return f"Error: {e}"
 
     def get_system_version(self) -> str:
-        """Get the Security Center version from the directory server.
+        """Get the Security Center version from the SDK service.
 
         Returns:
             Version string (e.g. '5.13.3132.18').
 
         Raises:
-            RuntimeError: If not connected or no server entity found.
+            RuntimeError: If not connected or query fails.
         """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to Security Center.")
-
-        from Genetec.Sdk import EntityType, ReportType  # type: ignore[import-untyped]
-
-        query = self._engine.ReportManager.CreateReportQuery(
-            ReportType.EntityConfiguration
-        )
-        query.EntityTypeFilter.Add(EntityType.Server)
-        results = query.Query()
-
-        import System  # type: ignore[import-untyped]
-
-        for row in results.Data.Rows:
-            guid = System.Guid(str(row["Guid"]))
-            server = self._engine.GetEntity(guid)
-            if server is not None:
-                return str(server.Version)
-
-        raise RuntimeError("No server entity found in Security Center.")
+        data = self._get("/api/system/version")
+        return data["version"]
 
     def create_cardholder(
         self,
@@ -213,7 +78,7 @@ class GenetecConnection:
         email: Optional[str] = None,
         mobile_phone: Optional[str] = None,
     ) -> str:
-        """Create a new cardholder entity in Security Center.
+        """Create a new cardholder entity via the SDK service.
 
         Args:
             first_name: Cardholder's first name (required).
@@ -225,30 +90,22 @@ class GenetecConnection:
             The GUID string of the newly created cardholder.
 
         Raises:
-            RuntimeError: If not connected to Security Center.
             ValueError: If first_name or last_name is empty.
+            RuntimeError: If the SDK service returns an error.
         """
         if not first_name:
             raise ValueError("first_name is required and cannot be empty.")
         if not last_name:
             raise ValueError("last_name is required and cannot be empty.")
-        if not self.is_connected:
-            raise RuntimeError("Not connected to Security Center.")
 
-        from Genetec.Sdk import EntityType  # type: ignore[import-untyped]
-
-        entity_name = f"{first_name} {last_name}"
-        cardholder = self._engine.CreateEntity(entity_name, EntityType.Cardholder)
-
-        cardholder.FirstName = first_name
-        cardholder.LastName = last_name
-
+        body: dict[str, Any] = {"firstName": first_name, "lastName": last_name}
         if email:
-            cardholder.EmailAddress = email
+            body["email"] = email
         if mobile_phone:
-            cardholder.MobilePhoneNumber = mobile_phone
+            body["mobilePhone"] = mobile_phone
 
-        return str(cardholder.Guid)
+        data = self._post("/api/cardholders", body)
+        return data["guid"]
 
     def add_cloudlink_unit(
         self,
@@ -258,21 +115,21 @@ class GenetecConnection:
         password: str,
         access_manager_guid: str,
     ) -> str:
-        """Enroll a Synergis Cloudlink unit into an Access Manager role.
+        """Enroll a Synergis Cloudlink unit via the SDK service.
 
         Args:
             name: Display name for the unit.
             ip_address: IP address or hostname of the Cloudlink device.
             username: Admin username for the Cloudlink unit.
             password: Admin password for the Cloudlink unit.
-            access_manager_guid: GUID of the Access Manager role to assign to.
+            access_manager_guid: GUID of the Access Manager role.
 
         Returns:
-            The GUID string of the newly created unit entity.
+            The name of the enrolled unit.
 
         Raises:
-            RuntimeError: If not connected to Security Center.
             ValueError: If any required parameter is empty.
+            RuntimeError: If the SDK service returns an error.
         """
         if not name:
             raise ValueError("name is required and cannot be empty.")
@@ -280,63 +137,16 @@ class GenetecConnection:
             raise ValueError("ip_address is required and cannot be empty.")
         if not access_manager_guid:
             raise ValueError("access_manager_guid is required and cannot be empty.")
-        if not self.is_connected:
-            raise RuntimeError("Not connected to Security Center.")
 
-        import System  # type: ignore[import-untyped]
-        from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
-        from System.Security import SecureString  # type: ignore[import-untyped]
+        data = self._post("/api/units/cloudlink", {
+            "name": name,
+            "ipAddress": ip_address,
+            "username": username,
+            "password": password,
+            "accessManagerGuid": access_manager_guid,
+        })
+        return data["name"]
 
-        AccessControlExtensionType = self._import_type("AccessControlExtensionType")
-        AddAccessControlUnitInfo = self._import_type("AddAccessControlUnitInfo")
-
-        # Build SecureString for the password
-        secure_password = SecureString()
-        for ch in password:
-            secure_password.AppendChar(ch)
-
-        info = AddAccessControlUnitInfo(
-            address=NetIPAddress.Parse(ip_address),
-            extensionType=AccessControlExtensionType.CloudLink,
-            port=80,
-            username=username,
-            password=secure_password,
-        )
-
-        role_guid = System.Guid(access_manager_guid)
-
-        # Subscribe to enrollment events to capture result
-        done = threading.Event()
-        result_holder: list[str] = []
-        error_holder: list[str] = []
-
-        def on_success(sender, e):  # type: ignore[no-untyped-def]
-            result_holder.append("success")
-            done.set()
-
-        def on_failed(sender, e):  # type: ignore[no-untyped-def]
-            error_holder.append(str(e.ActionDetails))
-            done.set()
-
-        mgr = self._engine.AccessControlUnitManager
-        mgr.UnitEnrollmentSucceeded += on_success
-        mgr.UnitEnrollmentFailed += on_failed
-
-        try:
-            mgr.EnrollAccessControlUnit(info, role_guid)
-
-            if not done.wait(timeout=60.0):
-                raise RuntimeError("Unit enrollment timed out after 60 seconds.")
-
-            if error_holder:
-                raise RuntimeError(f"Unit enrollment failed: {error_holder[0]}")
-
-            return name
-        finally:
-            mgr.UnitEnrollmentSucceeded -= on_success
-            mgr.UnitEnrollmentFailed -= on_failed
-
-    # Supported Mercury controller types for add_mercury_controller
     MERCURY_CONTROLLER_TYPES = {
         "EP1501", "EP1501WithExpansion", "EP1502", "EP2500", "EP4502",
         "LP1501", "LP1501WithExpansion", "LP1502", "LP2500", "LP4502",
@@ -353,15 +163,12 @@ class GenetecConnection:
         port: int = 3001,
         channel: int = 0,
     ) -> str:
-        """Add a Mercury EP/LP/MP sub-controller to an enrolled Cloudlink unit.
-
-        Uses AccessControlInterfacePeripheralsBuilder to add the controller
-        as a bus interface module under the specified unit.
+        """Add a Mercury sub-controller via the SDK service.
 
         Args:
             unit_guid: GUID of the parent Cloudlink unit.
             name: Display name for the interface module.
-            controller_type: Mercury model (e.g. 'LP1502', 'EP1502', 'EP4502').
+            controller_type: Mercury model (e.g. 'LP1502').
             ip_address: IP address of the Mercury controller.
             port: TCP port (default 3001).
             channel: Channel number (default 0).
@@ -370,8 +177,8 @@ class GenetecConnection:
             A result string describing the outcome.
 
         Raises:
-            RuntimeError: If not connected or build fails.
             ValueError: If any required parameter is empty or type is invalid.
+            RuntimeError: If the SDK service returns an error.
         """
         if not unit_guid:
             raise ValueError("unit_guid is required and cannot be empty.")
@@ -386,41 +193,42 @@ class GenetecConnection:
             )
         if not ip_address:
             raise ValueError("ip_address is required and cannot be empty.")
-        if not self.is_connected:
-            raise RuntimeError("Not connected to Security Center.")
 
-        import System  # type: ignore[import-untyped]
-        from System.Net import IPAddress as NetIPAddress  # type: ignore[import-untyped]
-
-        # Resolve the Mercury controller class (e.g. MercuryLP1502)
-        mercury_class_name = f"Mercury{controller_type}"
-        MercuryClass = self._import_type(mercury_class_name)
-        AccessControlInterfacePeripheralsBuilder = self._import_type(
-            "AccessControlInterfacePeripheralsBuilder"
-        )
-
-        # Create and configure the Mercury interface object
-        mercury_interface = MercuryClass()
-        mercury_interface.IpAddress = NetIPAddress.Parse(ip_address)
-        mercury_interface.Port = port
-        mercury_interface.Channel = channel
-
-        # Build and commit via the peripherals builder
-        parent_guid = System.Guid(unit_guid)
-        builder = AccessControlInterfacePeripheralsBuilder(
-            self._engine, parent_guid
-        )
-        builder.AddAccessControlBusInterface(name, mercury_interface)
-        builder.Build()
-
-        return f"Mercury {controller_type} '{name}' added at {ip_address} to unit {unit_guid}"
+        data = self._post(f"/api/units/{unit_guid}/mercury", {
+            "name": name,
+            "controllerType": controller_type,
+            "ipAddress": ip_address,
+            "port": port,
+            "channel": channel,
+        })
+        return data["message"]
 
     def disconnect(self) -> None:
-        """Disconnect from Security Center."""
-        if self.is_connected:
-            self._engine.LoginManager.LogOff()
+        """No-op; the SDK service manages its own connection."""
 
     def dispose(self) -> None:
-        """Dispose of the engine resources."""
-        self.disconnect()
-        self._engine.Dispose()
+        """Close the HTTP client."""
+        self._client.close()
+
+    def _get(self, path: str) -> dict[str, Any]:
+        """Make a GET request and return the data field."""
+        resp = self._client.get(path)
+        resp.raise_for_status()
+        body = resp.json()
+        if not body.get("success"):
+            error = body.get("error", "Unknown error from SDK service.")
+            raise RuntimeError(error)
+        return body.get("data", {})
+
+    def _post(self, path: str, json_body: dict[str, Any]) -> dict[str, Any]:
+        """Make a POST request and return the data field."""
+        resp = self._client.post(path, json=json_body)
+        if resp.status_code == 400:
+            body = resp.json()
+            raise ValueError(body.get("error", "Bad request."))
+        resp.raise_for_status()
+        body = resp.json()
+        if not body.get("success"):
+            error = body.get("error", "Unknown error from SDK service.")
+            raise RuntimeError(error)
+        return body.get("data", {})

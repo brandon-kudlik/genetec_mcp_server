@@ -5,10 +5,9 @@ description = "MCP server for Genetec Security Center 5.13 SDK"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "clr-loader>=0.2.10",
+    "httpx>=0.27",
     "mcp>=1.0.0",
     "python-dotenv>=1.2.2",
-    "pythonnet>=3.0.5",
 ]
 
 [project.scripts]

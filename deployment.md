@@ -244,7 +244,7 @@ The following security measures should be applied to both instances. Full implem
 
 ## 8. Configuring WIN-SERVER-02 as the Genetec Remote MCP Server
 
-This section deploys [brandon-kudlik/genetec_mcp_server](https://github.com/brandon-kudlik/genetec_mcp_server) on WIN-SERVER-02. The server is a Python application managed by `uv` that connects to a Genetec Security Center directory and exposes tools to Claude Desktop over HTTPS using the Streamable HTTP MCP transport.
+This section deploys [brandon-kudlik/genetec_mcp_server](https://github.com/brandon-kudlik/genetec_mcp_server) on WIN-SERVER-02. The system consists of two services: a **C# SDK Service** (ASP.NET Minimal API on port 5100) that handles all Genetec SDK interop natively, and a **Python MCP Server** (FastMCP on port 8000) that exposes tools to Claude Desktop over HTTPS using the Streamable HTTP MCP transport. The Python server communicates with the C# service over localhost HTTP.
 
 > **NOTE:** All steps are performed on WIN-SERVER-02 via RDP unless stated otherwise. Complete Sections 1–7 first.
 
@@ -255,11 +255,16 @@ This section deploys [brandon-kudlik/genetec_mcp_server](https://github.com/bran
 | Internet-facing | AWS ALB (port 443) | TLS termination, ACM certificate, idle-timeout control |
 | DNS | Route 53 alias to ALB | mcp.yourdomain.com → ALB DNS name |
 | TLS | AWS Certificate Manager (ACM) | Free auto-renewing certificate |
-| Application | Python FastMCP (uvicorn, port 8000) | Streamable HTTP MCP transport |
+| MCP Server | Python FastMCP (uvicorn, port 8000) | Streamable HTTP MCP transport, tool definitions |
+| SDK Service | C# ASP.NET Minimal API (Kestrel, port 5100) | Native Genetec SDK interop, REST API |
 | Genetec SDK | .NET 8 runtime + Genetec.Sdk.dll | Platform SDK connection to Security Center |
 | Python runtime | uv (managed Python 3.12+) | Dependency isolation, reproducible installs |
-| Service management | NSSM Windows Service | Auto-start, auto-restart on failure, log rotation |
-| Certificates folder | `C:\mcp\Certificates\` | Genetec SDK TLS/identity certificates |
+| Service management | **Two** NSSM Windows Services | `GenetecSdkService` (C#) + `GenetecMCPServer` (Python) |
+| Certificates folder | `<SDK_PATH>\certificates\` | Genetec SDK TLS/identity certificates |
+
+```
+Claude Desktop → ALB (443) → Python MCP Server (8000) → C# SDK Service (5100) → Genetec Security Center
+```
 
 > **WARNING:** Do NOT use IIS or IIS ARR as a reverse proxy. IIS buffers HTTP responses which breaks SSE streaming. The Python server listens on plain HTTP port 8000 internally. All external HTTPS is handled by the ALB.
 
@@ -389,17 +394,22 @@ You should see the XML certificate with the DAP development `ApplicationId`.
 
 ---
 
-### 8.3 Step 2: Install the .NET 8 Runtime on WIN-SERVER-02
+### 8.3 Step 2: Install .NET 8 on WIN-SERVER-02
 
-The Genetec Platform SDK requires .NET 8. Run all commands in PowerShell (Run as Administrator).
+The C# SDK Service requires .NET 8. You have two options:
 
-**Check if .NET 8 is already installed:**
+- **Option A (recommended):** Publish the C# service as self-contained (`--self-contained`). This bundles the .NET runtime into the published output. You only need the .NET SDK on a **build machine** (can be your dev machine), not on WIN-SERVER-02.
+- **Option B:** Install the .NET 8 runtime on WIN-SERVER-02 and publish as framework-dependent.
+
+For Option A (self-contained), skip to Step 3 if you will build elsewhere and copy the published output to WIN-SERVER-02. For Option B, or if you want to build on WIN-SERVER-02 directly, install the .NET 8 SDK:
+
 ```powershell
-dotnet --list-runtimes
+# Check if .NET 8 is already installed
+dotnet --list-sdks
 ```
-If you see `Microsoft.NETCore.App 8.x.x`, skip to Step 3.
+If you see `8.x.x`, skip to Step 3.
 
-**If `dotnet` is not recognized or the runtime is missing:**
+**If `dotnet` is not recognized or the SDK is missing:**
 
 ```powershell
 # Step 1 — Create temp folder and force TLS 1.2
@@ -407,14 +417,13 @@ New-Item -ItemType Directory -Path C:\Temp -Force
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # Step 2 — Download the official Microsoft install script
-# If Invoke-WebRequest fails, use: curl.exe -L "https://dot.net/v1/dotnet-install.ps1" -o "C:\Temp\dotnet-install.ps1"
 Invoke-WebRequest -Uri "https://dot.net/v1/dotnet-install.ps1" `
   -OutFile "C:\Temp\dotnet-install.ps1" `
   -UseBasicParsing
 
-# Step 3 — Allow the script to run and install .NET 8 system-wide
+# Step 3 — Install .NET 8 SDK system-wide
 Set-ExecutionPolicy Bypass -Scope Process -Force
-& C:\Temp\dotnet-install.ps1 -Channel 8.0 -Runtime dotnet -InstallDir "C:\Program Files\dotnet"
+& C:\Temp\dotnet-install.ps1 -Channel 8.0 -InstallDir "C:\Program Files\dotnet"
 
 # Step 4 — Add dotnet to the system PATH permanently
 $existingPath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
@@ -427,12 +436,12 @@ if ($existingPath -notlike "*C:\Program Files\dotnet*") {
 # Step 5 — Reload PATH in current session and verify
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
             [System.Environment]::GetEnvironmentVariable("Path","User")
-dotnet --list-runtimes
+dotnet --list-sdks
 ```
 
-You should see `Microsoft.NETCore.App 8.0.x` in the output.
+You should see `8.0.x` in the output.
 
-> **NOTE:** The original `.msi` direct download approach is unreliable — Microsoft's CDN URLs change with each patch release. The `dotnet-install.ps1` script is the official Microsoft-recommended automation method and always pulls the latest 8.0.x patch.
+> **NOTE:** The `dotnet-install.ps1` script is the official Microsoft-recommended automation method. Without `-Runtime` flag it installs the full SDK (includes build tools + runtime).
 
 ---
 
@@ -487,7 +496,7 @@ Verify the structure:
 Get-ChildItem -Name
 ```
 
-You should see: `Certificates`, `src`, `tests`, `.env.example`, `.python-version`, `CLAUDE.md`, `README.md`, `genetec_sdk.runtimeconfig.json`, `pyproject.toml`, `uv.lock`
+You should see: `Certificates`, `genetec_sdk_service`, `src`, `tests`, `.env.example`, `.python-version`, `CLAUDE.md`, `README.md`, `pyproject.toml`, `uv.lock`
 
 #### 4c. Create and configure the .env file
 
@@ -496,18 +505,13 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-Fill in all values. The `.env` file contains the following variables:
+The Python `.env` file is minimal — SDK-specific configuration has moved to the C# service's `appsettings.json`:
 
 | Variable | Example Value | Description |
 |---|---|---|
-| `GENETEC_SDK_PATH` | `C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows` | Path to the Genetec SDK DLLs |
-| `GENETEC_CONFIG_PATH` | `C:\ProgramData\Genetec Security Center 5.13` | Path for .gconfig files (auto-created if missing) |
-| `GENETEC_SERVER` | `172.31.25.170` | IP or hostname of the Security Center Directory server |
-| `GENETEC_USERNAME` | `api` | Security Center username |
-| `GENETEC_PASSWORD` | `YourPassword` | Security Center password |
-| `GENETEC_CLIENT_CERTIFICATE` | *(commented out by default)* | SDK client certificate ApplicationId — leave commented to use the default development cert |
-
-> **NOTE:** `GENETEC_SERVER` uses a private IP in the `172.31.x.x` range — the AWS default VPC subnet. This means your Security Center directory is inside AWS and WIN-SERVER-02 reaches it directly over the private network with no internet hop. Leave `GENETEC_CLIENT_CERTIFICATE` commented out for development.
+| `GENETEC_SDK_SERVICE_URL` | `http://localhost:5100` | URL of the C# SDK Service (default: `http://localhost:5100`) |
+| `GENETEC_MCP_HOST` | `0.0.0.0` | MCP server bind address (optional, default: `0.0.0.0`) |
+| `GENETEC_MCP_PORT` | `8000` | MCP server port (optional, default: `8000`) |
 
 > **NOTE:** There is no `MCP_TOKEN` or HTTP authentication layer in this server. The MCP endpoint is currently unauthenticated at the HTTP level — access control is provided by the ALB Security Group and network-level restrictions. See Section 9, Item 8 for hardening options.
 
@@ -537,13 +541,83 @@ Get-Item .venv
 
 ---
 
-### 8.7 Step 6: Test the Server Manually
+### 8.7 Step 6: Test the Servers Manually
 
 Always test interactively before installing as a service — errors appear directly in the console.
 
-#### 6a. Verify SDK Connection to Security Center
+#### 6a. Build and Configure the C# SDK Service
 
-Before starting the MCP server, verify the SDK can connect to Security Center. This isolates SDK/credential/certificate issues from MCP transport issues.
+First, build the C# SDK service. You can either build on WIN-SERVER-02 directly or build elsewhere and copy the output.
+
+**Build on WIN-SERVER-02 (requires .NET 8 SDK):**
+
+```powershell
+Set-Location C:\mcp\genetec_mcp_server
+
+# Set the SDK path for the build (MSBuild property)
+dotnet publish genetec_sdk_service\src\GenetecSdkService.Api\ `
+  -c Release -r win-x64 --self-contained `
+  -p:GenetecSdkPath="C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows" `
+  -o C:\mcp\genetec_sdk_service_publish
+```
+
+**Configure `appsettings.json`:**
+
+```powershell
+notepad C:\mcp\genetec_sdk_service_publish\appsettings.json
+```
+
+Update the `GenetecSdk` section with your deployment values:
+
+| Setting | Example Value | Description |
+|---|---|---|
+| `SdkPath` | `C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows` | Path to SDK DLLs |
+| `ConfigPath` | `C:\ProgramData\Genetec Security Center 5.13` | Path for .gconfig files |
+| `Server` | `172.31.25.170` | Security Center Directory server IP |
+| `Username` | `api` | Security Center username (empty = Windows auth) |
+| `Password` | `YourPassword` | Security Center password |
+| `ClientCertificate` | *(default DAP cert)* | SDK ApplicationId string |
+
+> **NOTE:** `Server` uses the private IP `172.31.25.170` — WIN-SERVER-01 within the same VPC.
+
+#### 6b. Start the C# SDK Service and Verify Connection
+
+```powershell
+C:\mcp\genetec_sdk_service_publish\GenetecSdkService.Api.exe
+```
+
+Watch the console output for:
+- `Connected to Genetec Security Center at 172.31.25.170` = success
+- `connection failed` or `timed out` = check credentials, certificates, NuGet DLLs, network
+
+**In a second PowerShell window, test the health endpoint:**
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5100/api/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+```
+
+**Expected output:**
+```json
+{"success":true,"data":{"isConnected":true,"serverVersion":"5.13.3132.18"}}
+```
+
+**Test the version endpoint:**
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5100/api/system/version" -UseBasicParsing | Select-Object -ExpandProperty Content
+```
+
+**If `isConnected` is `false`:**
+- Check the C# service console output for error details
+- A generic `Failed` code means the failure is **pre-authentication** — caused by a missing NuGet DLL or certificate
+- Verify all NuGet DLLs are present (Step 1d verification script)
+- Verify the SDK certificate exists at `<SDK_PATH>\certificates\Genetec.Sdk.Engine.cert` (Step 1e)
+- Test network connectivity: `Test-NetConnection -ComputerName 172.31.25.170 -Port 4502`
+
+Do not proceed to 6c until the health endpoint returns `isConnected: true`.
+
+#### 6c. Verify Python MCP Server → C# SDK Service
+
+With the C# service still running:
 
 ```powershell
 Set-Location C:\mcp\genetec_mcp_server
@@ -569,20 +643,13 @@ Last failure: None
 Version: 5.13.3132.18
 ```
 
-**If you see `Connect result: Failed`:**
-- A generic `Failed` code that occurs regardless of correct/wrong credentials means the failure is **pre-authentication** — caused by a missing NuGet DLL or certificate, not credentials
-- Verify all NuGet DLLs are present (Step 1d verification script)
-- Verify the SDK certificate exists at `<SDK_PATH>\certificates\Genetec.Sdk.Engine.cert` (Step 1e)
-- Test network connectivity: `Test-NetConnection -ComputerName 172.31.25.170 -Port 4502`
+**If you see `Error: [Errno 111] Connection refused` or `ConnectError`:**
+- The C# SDK Service is not running on port 5100
+- Verify the `GENETEC_SDK_SERVICE_URL` in `.env` matches the C# service's Kestrel URL
 
-**If you see `Connect result: Timeout`:**
-- The Directory server is unreachable — check network, Security Group, and Windows Firewall
+#### 6d. Start the MCP server interactively
 
-> **WARNING:** The MCP server's `app_lifespan` does not log or check the return value of `conn.connect()`. The server will start and appear healthy even if the SDK connection fails. Always run this verification step on a new deployment before proceeding.
-
-Do not proceed to 6b until this step returns `Success`.
-
-#### 6b. Start the server interactively
+With the C# SDK Service still running from 6b, start the Python MCP server:
 
 **Window 1 — Start the server:**
 ```powershell
@@ -592,8 +659,7 @@ uv run genetec-mcp-server
 
 Watch for:
 - A line confirming it's listening on port 8000
-- A successful connection message to the Genetec Security Center directory
-- Any certificate or authentication errors — resolve these before continuing
+- No import errors (pythonnet is no longer a dependency)
 
 **Window 2 — Test the MCP endpoint:**
 
@@ -621,7 +687,9 @@ Press **Ctrl+C** in Window 1 to stop the server before proceeding.
 
 ---
 
-### 8.8 Step 7: Install NSSM and Register as a Windows Service
+### 8.8 Step 7: Install NSSM and Register Windows Services
+
+Two NSSM services are required: the C# SDK Service starts first, then the Python MCP Server.
 
 All commands run in PowerShell (Run as Administrator).
 
@@ -636,7 +704,42 @@ Copy-Item 'C:\Temp\nssm\nssm-2.24\win64\nssm.exe' 'C:\Windows\System32\nssm.exe'
 nssm version
 ```
 
-#### 7b. Find the uv executable path
+#### 7b. Register the C# SDK Service
+
+```powershell
+nssm install GenetecSdkService "C:\mcp\genetec_sdk_service_publish\GenetecSdkService.Api.exe"
+
+nssm set GenetecSdkService AppDirectory   "C:\mcp\genetec_sdk_service_publish"
+nssm set GenetecSdkService AppExit        Default Restart
+nssm set GenetecSdkService AppRestartDelay 5000
+nssm set GenetecSdkService Start          SERVICE_AUTO_START
+nssm set GenetecSdkService DisplayName    "Genetec SDK Service"
+nssm set GenetecSdkService Description    "C# service providing REST API to Genetec Security Center SDK"
+```
+
+**Configure logging:**
+
+```powershell
+New-Item -ItemType Directory -Path C:\mcp\genetec_sdk_service_publish\logs -Force
+nssm set GenetecSdkService AppStdout      "C:\mcp\genetec_sdk_service_publish\logs\stdout.log"
+nssm set GenetecSdkService AppStderr      "C:\mcp\genetec_sdk_service_publish\logs\stderr.log"
+nssm set GenetecSdkService AppRotateFiles 1
+nssm set GenetecSdkService AppRotateSeconds 86400
+nssm set GenetecSdkService AppRotateBytes 10485760
+```
+
+**Start and verify:**
+
+```powershell
+nssm start GenetecSdkService
+Get-Service GenetecSdkService
+Start-Sleep 5
+Invoke-WebRequest -Uri "http://localhost:5100/api/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+```
+
+Expected: `{"success":true,"data":{"isConnected":true,...}}`
+
+#### 7c. Find the uv executable path
 
 ```powershell
 (Get-Command uv).Source
@@ -644,10 +747,10 @@ nssm version
 
 Note the full path (e.g. `C:\Users\Administrator\.local\bin\uv.exe`).
 
-#### 7c. Register the service
+#### 7d. Register the Python MCP Server
 
 ```powershell
-# Replace <UV_PATH> with the path from 7b
+# Replace <UV_PATH> with the path from 7c
 nssm install GenetecMCPServer "<UV_PATH>"
 
 nssm set GenetecMCPServer AppDirectory   "C:\mcp\genetec_mcp_server"
@@ -656,10 +759,13 @@ nssm set GenetecMCPServer AppExit        Default Restart
 nssm set GenetecMCPServer AppRestartDelay 5000
 nssm set GenetecMCPServer Start          SERVICE_DELAYED_AUTO_START
 nssm set GenetecMCPServer DisplayName    "Genetec MCP Server"
-nssm set GenetecMCPServer Description    "Genetec Security Center MCP server for Claude Desktop"
+nssm set GenetecMCPServer Description    "Python MCP server for Claude Desktop — depends on GenetecSdkService"
+nssm set GenetecMCPServer DependOnService GenetecSdkService
 ```
 
-#### 7d. Configure logging
+> **NOTE:** The `DependOnService` setting ensures `GenetecSdkService` starts before `GenetecMCPServer`. Without this, the Python server may start before the C# service is ready, causing health check failures.
+
+**Configure logging:**
 
 ```powershell
 New-Item -ItemType Directory -Path C:\mcp\genetec_mcp_server\logs -Force
@@ -670,9 +776,10 @@ nssm set GenetecMCPServer AppRotateSeconds 86400
 nssm set GenetecMCPServer AppRotateBytes 10485760
 ```
 
-#### 7e. Set service account
+#### 7e. Set service accounts
 
 ```powershell
+nssm set GenetecSdkService ObjectName LocalSystem
 nssm set GenetecMCPServer ObjectName LocalSystem
 ```
 
@@ -680,26 +787,26 @@ nssm set GenetecMCPServer ObjectName LocalSystem
 > ```powershell
 > nssm set GenetecMCPServer ObjectName .\Administrator
 > ```
-> You will be prompted for the Administrator password.
+> You will be prompted for the Administrator password. The C# service can remain as LocalSystem since it's a self-contained executable.
 
-#### 7f. Start and verify
+#### 7f. Start the Python MCP Server and verify both services
 
 ```powershell
 nssm start GenetecMCPServer
-Get-Service GenetecMCPServer
+Get-Service GenetecSdkService, GenetecMCPServer
 Start-Sleep 5
 Get-Content C:\mcp\genetec_mcp_server\logs\stdout.log -Tail 20
 Invoke-WebRequest -Uri http://localhost:8000/mcp -Method GET -UseBasicParsing
 ```
 
-A `406` response on the GET confirms the server is running and responding correctly — the MCP endpoint only accepts POST with the correct `Accept` header, so 406 on a plain GET is expected healthy behavior.
+A `406` response on the GET confirms the Python MCP server is running and responding correctly — the MCP endpoint only accepts POST with the correct `Accept` header, so 406 on a plain GET is expected healthy behavior.
 
 **Verify auto-start after reboot:**
 ```powershell
 Restart-Computer -Force
 ```
 
-After the instance restarts, RDP back in and run `Get-Service GenetecMCPServer` — it must show `Running` automatically.
+After the instance restarts, RDP back in and run `Get-Service GenetecSdkService, GenetecMCPServer` — both must show `Running` automatically, with `GenetecSdkService` starting first.
 
 ---
 
@@ -712,13 +819,13 @@ New-NetFirewallRule -DisplayName 'Genetec MCP Server Port 8000' `
   -LocalPort 8000 `
   -Action Allow `
   -Profile Any `
-  -Description 'Allows ALB to forward HTTPS traffic to uvicorn'
+  -Description 'Allows ALB to forward HTTPS traffic to the Python MCP server'
 
 # Verify
 Get-NetFirewallRule -DisplayName 'Genetec MCP Server Port 8000' | Select-Object Name,Enabled,Action
 ```
 
-> **NOTE:** Port 443 does not need a Windows Firewall rule. TLS is terminated at the ALB — the Python server only receives plain HTTP on port 8000 from the ALB's internal VPC forwarding.
+> **NOTE:** Port 5100 (C# SDK Service) does **not** need a firewall rule — it only listens on `localhost` and is never accessed from outside WIN-SERVER-02. Port 443 does not need a Windows Firewall rule either — TLS is terminated at the ALB.
 
 ---
 
@@ -913,34 +1020,68 @@ Remote MCP servers are added through the **Connectors UI** — not via `claude_d
 When the repository receives updates:
 
 ```powershell
+# Stop both services
 nssm stop GenetecMCPServer
+nssm stop GenetecSdkService
+
+# Pull latest code
 Set-Location C:\mcp\genetec_mcp_server
 git pull origin main
+
+# Rebuild and republish the C# SDK Service
+dotnet publish genetec_sdk_service\src\GenetecSdkService.Api\ `
+  -c Release -r win-x64 --self-contained `
+  -p:GenetecSdkPath="C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows" `
+  -o C:\mcp\genetec_sdk_service_publish
+
+# Sync Python dependencies
 uv sync
+
+# Start both services (SDK service first due to dependency)
+nssm start GenetecSdkService
+Start-Sleep 5
 nssm start GenetecMCPServer
-Get-Service GenetecMCPServer
+Get-Service GenetecSdkService, GenetecMCPServer
+
+# Verify health
+Invoke-WebRequest -Uri "http://localhost:5100/api/health" -UseBasicParsing | Select-Object -ExpandProperty Content
 Get-Content .\logs\stdout.log -Tail 30
 ```
+
+> **NOTE:** If only the Python code changed (no C# changes), you can skip the `dotnet publish` step and only restart `GenetecMCPServer`. If only the C# code changed, you can skip `uv sync` and only restart `GenetecSdkService`.
 
 ---
 
 ### 8.15 Troubleshooting Reference
 
+#### C# SDK Service Issues
+
 | Symptom | Root Cause | Fix |
 |---|---|---|
-| Service starts then stops | Python import error or missing .env variable | Run `uv run genetec-mcp-server` manually; read stderr output directly |
-| Cannot connect to Genetec directory | Wrong `GENETEC_SERVER`, port, or credentials | Verify values; test: `Test-NetConnection -ComputerName <ip> -Port 4502` |
-| Genetec SDK DLL not found | .NET 8 runtime missing or SDK not installed | Run `dotnet --list-runtimes`; reinstall SDK if needed |
-| ALB target shows unhealthy | Port 8000 blocked or server not running | Check service, firewall rule, SG rule, and health check path/codes |
-| `dotnet` not recognized after install | PATH not updated in current session | Run: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")` |
-| `Invoke-WebRequest` SSL error downloading scripts | TLS version mismatch | Add: `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` |
-| Connection drops after ~5 min | ALB idle timeout at default 60s | Confirm ALB idle timeout is set to 600s (Step 10e) |
-| uv command not found in service | uv installed per-user; LocalSystem can't see it | Set service to run as Administrator: `nssm set GenetecMCPServer ObjectName .\Administrator` |
-| Certificate errors on Genetec connection | Certificates folder empty | Place correct Genetec certificates in `C:\mcp\genetec_mcp_server\Certificates\` |
-| Generic `Failed` login — same error with correct and wrong credentials | Missing NuGet DLL in SDK directory (pre-auth failure) | Run Step 1d verification script; most commonly `Microsoft.Extensions.Caching.Abstractions.dll` is missing. Download from NuGet.org and place in SDK directory (see Step 1d) |
+| SDK Service fails to start | Missing .NET runtime or SDK DLLs | Check `C:\mcp\genetec_sdk_service_publish\logs\stderr.log`; verify self-contained publish included the runtime |
+| `http://localhost:5100/api/health` returns `isConnected: false` | SDK connection failed (credentials, certificate, NuGet DLL) | Check C# service logs; run Step 1d DLL verification; verify `appsettings.json` values |
+| Generic `Failed` login in C# logs — same error with correct and wrong credentials | Missing NuGet DLL in SDK directory (pre-auth failure) | Run Step 1d verification script; most commonly `Microsoft.Extensions.Caching.Abstractions.dll` is missing |
 | SDK cert file not found at runtime | `Genetec.Sdk.Engine.cert` missing from `<SDK_PATH>/certificates/` | Copy `Certificates/python.exe.cert` to `<SDK_PATH>/certificates/Genetec.Sdk.Engine.cert` (see Step 1e) |
-| Server starts, ALB healthy, but tool calls return "Not connected to Security Center" | `conn.connect()` failed silently during startup | Run the SDK connection verification script (Step 6a) to see the actual failure code; the MCP server does not log connection failures |
-| ALB target shows `Target.Timeout` after reboot | NSSM service did not auto-start | Check `Get-Service GenetecMCPServer`; verify start type with `nssm get GenetecMCPServer Start`; check Windows Event Log: `Get-EventLog -LogName System -Source "Service Control Manager" -Newest 20` |
+| Cannot connect to Genetec directory | Wrong `Server` in `appsettings.json`, port, or credentials | Verify values in `appsettings.json`; test: `Test-NetConnection -ComputerName <ip> -Port 4502` |
+| `dotnet` not recognized after install | PATH not updated in current session | Run: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")` |
+
+#### Python MCP Server Issues
+
+| Symptom | Root Cause | Fix |
+|---|---|---|
+| Python service starts then stops | Import error or missing .env variable | Run `uv run genetec-mcp-server` manually; read stderr output directly |
+| `ConnectionRefusedError` or `ConnectError` in Python logs | C# SDK Service not running on port 5100 | Check `Get-Service GenetecSdkService`; verify `GENETEC_SDK_SERVICE_URL` in `.env` |
+| Tool calls return "Not connected to Security Center" | C# SDK Service is running but not connected to SC | Check `http://localhost:5100/api/health`; fix the C# service connection first |
+| uv command not found in service | uv installed per-user; LocalSystem can't see it | Set service to run as Administrator: `nssm set GenetecMCPServer ObjectName .\Administrator` |
+
+#### Infrastructure Issues
+
+| Symptom | Root Cause | Fix |
+|---|---|---|
+| ALB target shows unhealthy | Port 8000 blocked or Python server not running | Check both services, firewall rule, SG rule, and health check path/codes |
+| ALB target shows `Target.Timeout` after reboot | NSSM services did not auto-start | Check `Get-Service GenetecSdkService, GenetecMCPServer`; verify start type; check Windows Event Log: `Get-EventLog -LogName System -Source "Service Control Manager" -Newest 20` |
+| Connection drops after ~5 min | ALB idle timeout at default 60s | Confirm ALB idle timeout is set to 600s (Step 10e) |
+| `Invoke-WebRequest` SSL error downloading scripts | TLS version mismatch | Add: `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` |
 | ASGI ClosedResourceError on POST | Race condition in MCP SDK stateful mode | Use MCP Inspector for testing: `npx @modelcontextprotocol/inspector http://localhost:8000/mcp` |
 | 406 on GET to /mcp | Expected — MCP endpoint requires POST + Accept header | Not an error; set ALB health check success codes to `200-406` |
 | curl INTERNAL_ERROR after 200 | curl closes SSE stream abruptly | Not an error; if you got 200 + Mcp-Session-Id the server is working |

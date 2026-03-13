@@ -1,3 +1,4 @@
+using System.IO;
 using Genetec.Sdk;
 
 namespace GenetecSdkService.Api.Services;

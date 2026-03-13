@@ -147,7 +147,11 @@ class GenetecConnection:
         })
         return data["name"]
 
-    INTERFACE_BOARD_TYPES = {"MR50", "MR52", "MR16IN", "MR16OUT"}
+    INTERFACE_BOARD_TYPES = {
+        "MR50", "MR51e", "MR52", "MR62e", "MR16In", "MR16Out",
+        "MSACS", "MSI8S", "MSR8S",
+        "M516Do", "M516Dor", "M520In", "M52K", "M52RP", "M52SRP", "M58RP",
+    }
 
     MERCURY_CONTROLLER_TYPES = {
         "EP1501", "EP1501WithExpansion", "EP1502", "EP2500", "EP4502",

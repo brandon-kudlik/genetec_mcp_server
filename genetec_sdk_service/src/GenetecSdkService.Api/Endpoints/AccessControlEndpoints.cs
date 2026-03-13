@@ -74,17 +74,5 @@ public static class AccessControlEndpoints
             }
         });
 
-        app.MapGet("/api/debug/mercury-types", (AccessControlService service) =>
-        {
-            try
-            {
-                var types = service.GetMercuryRelatedTypes();
-                return Results.Ok(ApiResponse<List<string>>.Ok(types));
-            }
-            catch (Exception ex)
-            {
-                return Results.Ok(ApiResponse<List<string>>.Fail(ex.Message));
-            }
-        });
     }
 }

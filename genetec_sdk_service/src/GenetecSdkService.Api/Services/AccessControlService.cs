@@ -161,7 +161,9 @@ public class AccessControlService
 
     private static readonly HashSet<string> ValidInterfaceBoardTypes = new()
     {
-        "MR50", "MR52", "MR16IN", "MR16OUT",
+        "MR50", "MR51e", "MR52", "MR62e", "MR16In", "MR16Out",
+        "MSACS", "MSI8S", "MSR8S",
+        "M516Do", "M516Dor", "M520In", "M52K", "M52RP", "M52SRP", "M58RP",
     };
 
     public InterfaceModuleResponse AddInterfaceModule(string controllerGuid, InterfaceModuleRequest request)
@@ -220,30 +222,6 @@ public class AccessControlService
         {
             Message = $"{request.BoardType} '{request.Name}' added to controller {controllerGuid}"
         };
-    }
-
-    /// <summary>
-    /// Diagnostic: scan loaded assemblies for Mercury/MR-related types.
-    /// </summary>
-    public List<string> GetMercuryRelatedTypes()
-    {
-        var results = new List<string>();
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                foreach (var t in asm.GetTypes())
-                {
-                    if (t.Name.Contains("Mercury") || t.Name.Contains("MR"))
-                        results.Add($"{t.FullName} ({asm.GetName().Name})");
-                }
-            }
-            catch (ReflectionTypeLoadException)
-            {
-                // Skip assemblies that fail to enumerate types
-            }
-        }
-        return results.OrderBy(r => r).ToList();
     }
 
     private static Type? FindTypeByName(string typeName)

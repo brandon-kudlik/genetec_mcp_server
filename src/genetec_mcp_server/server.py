@@ -177,7 +177,7 @@ async def add_interface_module(
     board_type: str,
     address: int = 0,
 ) -> str:
-    """Add an interface board (MR50, MR52, MR16IN, MR16OUT) to a Mercury controller.
+    """Add an interface board to a Mercury controller.
 
     Interface boards connect to Mercury controllers via the SIO bus. The entity
     hierarchy is: Cloudlink Unit → Mercury Controller → Interface Board.
@@ -185,7 +185,9 @@ async def add_interface_module(
     Args:
         controller_guid: GUID of the parent Mercury controller.
         name: Display name for the interface board.
-        board_type: Board model. Valid types: MR50, MR52, MR16IN, MR16OUT.
+        board_type: Board model. Valid types: MR50, MR51e, MR52, MR62e, MR16In,
+            MR16Out, MSACS, MSI8S, MSR8S, M516Do, M516Dor, M520In, M52K, M52RP,
+            M52SRP, M58RP.
         address: SIO bus address (default 0).
 
     Returns:

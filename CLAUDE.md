@@ -113,7 +113,7 @@ Follow strict red/green TDD for all new features:
 
 ### Entity Hierarchy
 ```
-Cloudlink Unit → Mercury Controller → Interface Board (MR50, MR52, MR16IN, MR16OUT)
+Cloudlink Unit → Mercury Controller → Interface Board (MR50, MR51e, MR52, MR62e, MR16In, MR16Out, etc.)
 ```
 
 ## Genetec Platform SDK Reference

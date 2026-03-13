@@ -37,5 +37,6 @@ var app = builder.Build();
 app.MapSystemEndpoints();
 app.MapCardholderEndpoints();
 app.MapAccessControlEndpoints();
+app.MapDiagnosticEndpoints();
 
 app.Run();

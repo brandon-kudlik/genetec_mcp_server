@@ -64,3 +64,13 @@ public class MercuryControllerResponse
 {
     public string Message { get; set; } = string.Empty;
 }
+
+public class DiagnosticResult
+{
+    public Dictionary<string, List<string>> AccessControlUnitManagerMethods { get; set; } = new();
+    public Dictionary<string, List<string>> EntityManagerBuilderMethods { get; set; } = new();
+    public Dictionary<string, List<string>> BuilderDetails { get; set; } = new();
+    public Dictionary<string, List<string>> UnitEntityInfo { get; set; } = new();
+    public List<string> RelevantTypes { get; set; } = new();
+    public List<string> RuntimeManagerMethods { get; set; } = new();
+}

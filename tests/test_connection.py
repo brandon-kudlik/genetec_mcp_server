@@ -255,3 +255,35 @@ class TestAddMercuryController:
                 ip_address="",
             )
         conn.dispose()
+
+
+class TestGetSdkIntrospection:
+    """Tests for get_sdk_introspection."""
+
+    def test_returns_introspection_data(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {
+                    "accessControlUnitManagerMethods": {},
+                    "entityManagerBuilderMethods": {},
+                    "builderDetails": {},
+                    "unitEntityInfo": {},
+                    "relevantTypes": ["MercuryLP1502"],
+                    "runtimeManagerMethods": [],
+                }}
+            )
+            result = conn.get_sdk_introspection()
+        assert "relevantTypes" in result
+        assert "MercuryLP1502" in result["relevantTypes"]
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.get_sdk_introspection()
+        conn.dispose()

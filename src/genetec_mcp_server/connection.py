@@ -203,6 +203,17 @@ class GenetecConnection:
         })
         return data["message"]
 
+    def get_sdk_introspection(self) -> dict[str, Any]:
+        """Get SDK type introspection data from the diagnostic endpoint.
+
+        Returns:
+            Dictionary with SDK type information for debugging.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        return self._get("/api/diagnostics/sdk-introspection")
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 

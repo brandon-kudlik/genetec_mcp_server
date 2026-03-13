@@ -1,6 +1,3 @@
-using System.Net;
-using System.Reflection;
-using System.Security;
 using Genetec.Sdk;
 
 namespace GenetecSdkService.Api.Services;
@@ -46,18 +43,8 @@ public class GenetecEngineService : IHostedService, IDisposable
     {
         _logger.LogInformation("Initializing Genetec SDK Engine...");
 
-        // Register assembly resolver for SDK transitive dependencies
-        var sdkPath = _options.SdkPath;
-        AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
-        {
-            var assemblyName = args.Name.Split(',')[0];
-            var dllPath = Path.Combine(sdkPath, $"{assemblyName}.dll");
-            if (File.Exists(dllPath))
-                return Assembly.LoadFrom(dllPath);
-            return null;
-        };
-
-        // Set configuration path for Engine constructor
+        // Assembly resolver is registered in Program.cs (must run before any SDK type is loaded).
+        // Set configuration path for Engine constructor.
         var configPath = _options.ConfigPath;
         Directory.CreateDirectory(Path.Combine(configPath, "ConfigurationFiles"));
         AppDomain.CurrentDomain.SetData("GENETEC_GCONFIG_PATH_5_13", configPath);

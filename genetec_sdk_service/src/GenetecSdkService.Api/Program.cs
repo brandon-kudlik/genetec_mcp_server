@@ -1,5 +1,24 @@
+using System.Reflection;
 using GenetecSdkService.Api.Endpoints;
 using GenetecSdkService.Api.Services;
+
+// Register assembly resolver BEFORE any SDK types are referenced.
+// The SDK path comes from configuration — read it early.
+var config = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
+
+var sdkPath = config["GenetecSdk:SdkPath"]
+    ?? @"C:\Program Files (x86)\Genetec Security Center 5.13 SDK\net8.0-windows";
+
+AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+{
+    var assemblyName = args.Name.Split(',')[0];
+    var dllPath = Path.Combine(sdkPath, $"{assemblyName}.dll");
+    if (File.Exists(dllPath))
+        return Assembly.LoadFrom(dllPath);
+    return null;
+};
 
 var builder = WebApplication.CreateBuilder(args);
 

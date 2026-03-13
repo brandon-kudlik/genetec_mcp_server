@@ -74,5 +74,17 @@ public static class AccessControlEndpoints
             }
         });
 
+        app.MapGet("/api/debug/builder-methods/{unitGuid}", (string unitGuid, AccessControlService service) =>
+        {
+            try
+            {
+                var methods = service.InspectBuilderMethods(unitGuid);
+                return Results.Ok(ApiResponse<List<string>>.Ok(methods));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<List<string>>.Fail(ex.InnerException?.Message ?? ex.Message));
+            }
+        });
     }
 }

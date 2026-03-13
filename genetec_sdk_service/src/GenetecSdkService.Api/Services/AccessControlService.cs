@@ -233,6 +233,37 @@ public class AccessControlService
         }
     }
 
+    /// <summary>
+    /// Diagnostic: inspect builder methods for a given unit GUID.
+    /// </summary>
+    public List<string> InspectBuilderMethods(string unitGuid)
+    {
+        if (!_engineService.IsConnected)
+            throw new InvalidOperationException("Not connected to Security Center.");
+
+        var engine = _engineService.Engine;
+        var guid = Guid.Parse(unitGuid);
+
+        var entityManager = engine.EntityManager;
+        var emType = ((object)entityManager).GetType();
+        var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
+            ?? throw new InvalidOperationException("Could not find GetAccessControlInterfacePeripheralsBuilder.");
+
+        var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { guid })
+            ?? throw new InvalidOperationException("Builder returned null.");
+
+        var builderType = builderObj.GetType();
+        var results = new List<string>();
+
+        foreach (var method in builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var paramList = string.Join(", ", method.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+            results.Add($"{method.ReturnType.Name} {method.Name}({paramList})");
+        }
+
+        return results.OrderBy(r => r).ToList();
+    }
+
     private static Type? FindTypeByName(string typeName)
     {
         foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())

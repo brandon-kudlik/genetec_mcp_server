@@ -132,7 +132,23 @@ public class AccessControlService
         var builderType = FindTypeByName("AccessControlInterfacePeripheralsBuilder")
             ?? throw new InvalidOperationException("Could not find AccessControlInterfacePeripheralsBuilder in loaded assemblies.");
 
-        dynamic builder = Activator.CreateInstance(builderType, engine, parentGuid)!;
+        // Use constructor invocation by parameter count — Activator.CreateInstance
+        // fails to match types when the constructor expects SDK-specific base types.
+        var ctors = builderType.GetConstructors();
+        object? builderObj = null;
+        foreach (var ctor in ctors)
+        {
+            var ctorParams = ctor.GetParameters();
+            if (ctorParams.Length == 2)
+            {
+                builderObj = ctor.Invoke(new object[] { engine, parentGuid });
+                break;
+            }
+        }
+        if (builderObj == null)
+            throw new InvalidOperationException($"No 2-parameter constructor found on {builderType.Name}.");
+
+        dynamic builder = builderObj;
         builder.AddAccessControlBusInterface(request.Name, mercuryInterface);
         builder.Build();
 

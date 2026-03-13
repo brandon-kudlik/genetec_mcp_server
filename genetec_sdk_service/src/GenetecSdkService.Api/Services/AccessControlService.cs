@@ -132,21 +132,69 @@ public class AccessControlService
         var builderType = FindTypeByName("AccessControlInterfacePeripheralsBuilder")
             ?? throw new InvalidOperationException("Could not find AccessControlInterfacePeripheralsBuilder in loaded assemblies.");
 
-        // Use constructor invocation by parameter count — Activator.CreateInstance
-        // fails to match types when the constructor expects SDK-specific base types.
-        var ctors = builderType.GetConstructors();
+        // Discover all constructors and pick the best match.
+        // Include non-public constructors since SDK builders may use internal ctors.
+        var ctors = builderType.GetConstructors(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // Build a diagnostic string of all constructor signatures
+        var ctorSignatures = string.Join("; ", ctors.Select(c =>
+            $"({string.Join(", ", c.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"))})"));
+
+        // Try to find a constructor we can call with (engine, parentGuid)
         object? builderObj = null;
         foreach (var ctor in ctors)
         {
             var ctorParams = ctor.GetParameters();
             if (ctorParams.Length == 2)
             {
-                builderObj = ctor.Invoke(new object[] { engine, parentGuid });
-                break;
+                try
+                {
+                    builderObj = ctor.Invoke(new object[] { engine, parentGuid });
+                    break;
+                }
+                catch
+                {
+                    // Parameter type mismatch — try next
+                }
             }
         }
+
+        // If no 2-param ctor worked, try any ctor that accepts engine as first param
         if (builderObj == null)
-            throw new InvalidOperationException($"No 2-parameter constructor found on {builderType.Name}.");
+        {
+            foreach (var ctor in ctors)
+            {
+                var ctorParams = ctor.GetParameters();
+                if (ctorParams.Length >= 1 && ctorParams[0].ParameterType.IsAssignableFrom(engine.GetType()))
+                {
+                    try
+                    {
+                        var args = new object[ctorParams.Length];
+                        args[0] = engine;
+                        if (ctorParams.Length >= 2) args[1] = parentGuid;
+                        // Fill remaining params with defaults
+                        for (int i = 2; i < ctorParams.Length; i++)
+                            args[i] = ctorParams[i].HasDefaultValue
+                                ? ctorParams[i].DefaultValue!
+                                : (ctorParams[i].ParameterType.IsValueType
+                                    ? Activator.CreateInstance(ctorParams[i].ParameterType)!
+                                    : null!);
+                        builderObj = ctor.Invoke(args);
+                        break;
+                    }
+                    catch
+                    {
+                        // Try next
+                    }
+                }
+            }
+        }
+
+        if (builderObj == null)
+            throw new InvalidOperationException(
+                $"Could not invoke any constructor on {builderType.Name}. " +
+                $"Available constructors: {ctorSignatures}");
 
         dynamic builder = builderObj;
         builder.AddAccessControlBusInterface(request.Name, mercuryInterface);

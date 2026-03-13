@@ -180,48 +180,57 @@ public class AccessControlService
         if (!_engineService.IsConnected)
             throw new InvalidOperationException("Not connected to Security Center.");
 
-        var engine = _engineService.Engine;
-        var parentGuid = Guid.Parse(controllerGuid);
-
-        // Resolve interface board class by name via reflection (e.g. MercuryMR50)
-        var boardClassName = $"Mercury{request.BoardType}";
-        var boardType = FindTypeByName(boardClassName)
-            ?? throw new InvalidOperationException($"Could not find type {boardClassName} in loaded assemblies.");
-
-        // Create the interface board object via reflection
-        var boardInterface = Activator.CreateInstance(boardType)!;
-
-        // Set Address property if it exists on the type
-        var addressProp = boardType.GetProperty("Address");
-        if (addressProp != null)
-            addressProp.SetValue(boardInterface, request.Address);
-
-        // Get the builder via the SDK accessor method using reflection
-        var entityManager = engine.EntityManager;
-        var emType = ((object)entityManager).GetType();
-        var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
-            ?? throw new InvalidOperationException(
-                "Could not find GetAccessControlInterfacePeripheralsBuilder on EntityManager.");
-
-        var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
-            ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
-
-        // All SDK builder calls must use reflection
-        var builderType = builderObj.GetType();
-
-        var addMethod = builderType.GetMethod("AddAccessControlBusInterface")
-            ?? throw new InvalidOperationException(
-                $"Could not find AddAccessControlBusInterface on {builderType.Name}.");
-        addMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface });
-
-        var buildMethod = builderType.GetMethod("Build")
-            ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
-        buildMethod.Invoke(builderObj, null);
-
-        return new InterfaceModuleResponse
+        try
         {
-            Message = $"{request.BoardType} '{request.Name}' added to controller {controllerGuid}"
-        };
+            var engine = _engineService.Engine;
+            var parentGuid = Guid.Parse(controllerGuid);
+
+            // Resolve interface board class by name via reflection (e.g. MercuryMR50)
+            var boardClassName = $"Mercury{request.BoardType}";
+            var boardType = FindTypeByName(boardClassName)
+                ?? throw new InvalidOperationException($"Could not find type {boardClassName} in loaded assemblies.");
+
+            // Create the interface board object via reflection
+            var boardInterface = Activator.CreateInstance(boardType)!;
+
+            // Set Address property if it exists on the type
+            var addressProp = boardType.GetProperty("Address");
+            if (addressProp != null)
+                addressProp.SetValue(boardInterface, request.Address);
+
+            // Get the builder via the SDK accessor method using reflection
+            var entityManager = engine.EntityManager;
+            var emType = ((object)entityManager).GetType();
+            var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
+                ?? throw new InvalidOperationException(
+                    "Could not find GetAccessControlInterfacePeripheralsBuilder on EntityManager.");
+
+            var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
+                ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
+
+            // All SDK builder calls must use reflection
+            var builderType = builderObj.GetType();
+
+            var addMethod = builderType.GetMethod("AddAccessControlBusInterface")
+                ?? throw new InvalidOperationException(
+                    $"Could not find AddAccessControlBusInterface on {builderType.Name}. " +
+                    $"Available methods: {string.Join(", ", builderType.GetMethods().Select(m => m.Name).Distinct())}");
+            addMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface });
+
+            var buildMethod = builderType.GetMethod("Build")
+                ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
+            buildMethod.Invoke(builderObj, null);
+
+            return new InterfaceModuleResponse
+            {
+                Message = $"{request.BoardType} '{request.Name}' added to controller {controllerGuid}"
+            };
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException != null)
+        {
+            throw new InvalidOperationException(
+                $"SDK error in AddInterfaceModule: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}", ex.InnerException);
+        }
     }
 
     private static Type? FindTypeByName(string typeName)

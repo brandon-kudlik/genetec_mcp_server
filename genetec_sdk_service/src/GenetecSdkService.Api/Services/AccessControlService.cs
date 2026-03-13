@@ -127,9 +127,17 @@ public class AccessControlService
         mercuryInterface.Port = request.Port;
         mercuryInterface.Channel = request.Channel;
 
-        // Get the builder via the SDK accessor method (not direct construction)
-        dynamic entityManager = engine.EntityManager;
-        dynamic builder = entityManager.GetAccessControlInterfacePeripheralsBuilder(parentGuid);
+        // Get the builder via the SDK accessor method using reflection
+        // (dynamic dispatch fails due to SDK assembly loading context)
+        var entityManager = engine.EntityManager;
+        var emType = ((object)entityManager).GetType();
+        var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
+            ?? throw new InvalidOperationException(
+                "Could not find GetAccessControlInterfacePeripheralsBuilder on EntityManager. " +
+                $"Available methods: {string.Join(", ", emType.GetMethods().Select(m => m.Name).Distinct())}");
+
+        dynamic builder = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
+            ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
         builder.AddAccessControlBusInterface(request.Name, mercuryInterface);
         builder.Build();
 

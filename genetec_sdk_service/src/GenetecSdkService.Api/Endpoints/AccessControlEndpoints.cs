@@ -52,5 +52,39 @@ public static class AccessControlEndpoints
                 return Results.Ok(ApiResponse<MercuryControllerResponse>.Fail(ex.Message));
             }
         });
+
+        app.MapPost("/api/units/{controllerGuid}/interface-modules", (string controllerGuid, InterfaceModuleRequest request, AccessControlService service) =>
+        {
+            try
+            {
+                var result = service.AddInterfaceModule(controllerGuid, request);
+                return Results.Ok(ApiResponse<InterfaceModuleResponse>.Ok(result));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ApiResponse<InterfaceModuleResponse>.Fail(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<InterfaceModuleResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<InterfaceModuleResponse>.Fail(ex.Message));
+            }
+        });
+
+        app.MapGet("/api/debug/mercury-types", (AccessControlService service) =>
+        {
+            try
+            {
+                var types = service.GetMercuryRelatedTypes();
+                return Results.Ok(ApiResponse<List<string>>.Ok(types));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<List<string>>.Fail(ex.Message));
+            }
+        });
     }
 }

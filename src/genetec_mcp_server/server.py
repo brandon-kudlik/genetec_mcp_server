@@ -167,3 +167,40 @@ async def add_mercury_controller(
         return f"Mercury controller enrolled successfully: {result}"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def add_interface_module(
+    ctx: Context,
+    controller_guid: str,
+    name: str,
+    board_type: str,
+    address: int = 0,
+) -> str:
+    """Add an interface board (MR50, MR52, MR16IN, MR16OUT) to a Mercury controller.
+
+    Interface boards connect to Mercury controllers via the SIO bus. The entity
+    hierarchy is: Cloudlink Unit → Mercury Controller → Interface Board.
+
+    Args:
+        controller_guid: GUID of the parent Mercury controller.
+        name: Display name for the interface board.
+        board_type: Board model. Valid types: MR50, MR52, MR16IN, MR16OUT.
+        address: SIO bus address (default 0).
+
+    Returns:
+        A success message or an error description.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.add_interface_module(
+            controller_guid=controller_guid,
+            name=name,
+            board_type=board_type,
+            address=address,
+        )
+        return f"Interface module added successfully: {result}"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"

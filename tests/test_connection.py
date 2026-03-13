@@ -255,3 +255,61 @@ class TestAddMercuryController:
                 ip_address="",
             )
         conn.dispose()
+
+
+class TestAddInterfaceModule:
+    """Tests for adding interface modules to Mercury controllers."""
+
+    def test_returns_message_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"message": "MR50 'Board-01' added to controller"}}
+            )
+            result = conn.add_interface_module(
+                controller_guid="00000000-0000-0000-0000-000000000001",
+                name="Board-01",
+                board_type="MR50",
+            )
+        assert "Board-01" in result
+        conn.dispose()
+
+    def test_requires_controller_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="controller_guid"):
+            conn.add_interface_module(
+                controller_guid="",
+                name="Board-01",
+                board_type="MR50",
+            )
+        conn.dispose()
+
+    def test_requires_name(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="name"):
+            conn.add_interface_module(
+                controller_guid="00000000-0000-0000-0000-000000000001",
+                name="",
+                board_type="MR50",
+            )
+        conn.dispose()
+
+    def test_requires_valid_board_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="Unknown board_type"):
+            conn.add_interface_module(
+                controller_guid="00000000-0000-0000-0000-000000000001",
+                name="Board-01",
+                board_type="InvalidBoard",
+            )
+        conn.dispose()
+
+    def test_requires_board_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="board_type"):
+            conn.add_interface_module(
+                controller_guid="00000000-0000-0000-0000-000000000001",
+                name="Board-01",
+                board_type="",
+            )
+        conn.dispose()

@@ -61,7 +61,7 @@ genetec_sdk_service/
     Endpoints/
       SystemEndpoints.cs          # GET /api/health, GET /api/system/version
       CardholderEndpoints.cs      # POST /api/cardholders
-      AccessControlEndpoints.cs   # POST /api/units/cloudlink, POST /api/units/{guid}/mercury
+      AccessControlEndpoints.cs   # POST /api/units/cloudlink, POST /api/units/{guid}/mercury, POST /api/units/{guid}/interface-modules
 ```
 
 ## Development Workflow: Red/Green TDD
@@ -109,6 +109,12 @@ Follow strict red/green TDD for all new features:
 | POST | `/api/cardholders` | Create cardholder |
 | POST | `/api/units/cloudlink` | Enroll Cloudlink unit |
 | POST | `/api/units/{guid}/mercury` | Add Mercury sub-controller |
+| POST | `/api/units/{guid}/interface-modules` | Add interface board to Mercury controller |
+
+### Entity Hierarchy
+```
+Cloudlink Unit → Mercury Controller → Interface Board (MR50, MR52, MR16IN, MR16OUT)
+```
 
 ## Genetec Platform SDK Reference
 **Wiki:** https://github.com/Genetec/DAP/wiki/platform-sdk-overview

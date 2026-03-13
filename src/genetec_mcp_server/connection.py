@@ -147,6 +147,8 @@ class GenetecConnection:
         })
         return data["name"]
 
+    INTERFACE_BOARD_TYPES = {"MR50", "MR52", "MR16IN", "MR16OUT"}
+
     MERCURY_CONTROLLER_TYPES = {
         "EP1501", "EP1501WithExpansion", "EP1502", "EP2500", "EP4502",
         "LP1501", "LP1501WithExpansion", "LP1502", "LP2500", "LP4502",
@@ -200,6 +202,47 @@ class GenetecConnection:
             "ipAddress": ip_address,
             "port": port,
             "channel": channel,
+        })
+        return data["message"]
+
+    def add_interface_module(
+        self,
+        controller_guid: str,
+        name: str,
+        board_type: str,
+        address: int = 0,
+    ) -> str:
+        """Add an interface module (MR50, MR52, etc.) to a Mercury controller.
+
+        Args:
+            controller_guid: GUID of the parent Mercury controller.
+            name: Display name for the interface board.
+            board_type: Board model (e.g. 'MR50', 'MR52', 'MR16IN', 'MR16OUT').
+            address: SIO bus address (default 0).
+
+        Returns:
+            A result string describing the outcome.
+
+        Raises:
+            ValueError: If any required parameter is empty or type is invalid.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not controller_guid:
+            raise ValueError("controller_guid is required and cannot be empty.")
+        if not name:
+            raise ValueError("name is required and cannot be empty.")
+        if not board_type:
+            raise ValueError("board_type is required and cannot be empty.")
+        if board_type not in self.INTERFACE_BOARD_TYPES:
+            raise ValueError(
+                f"Unknown board_type '{board_type}'. "
+                f"Valid types: {sorted(self.INTERFACE_BOARD_TYPES)}"
+            )
+
+        data = self._post(f"/api/units/{controller_guid}/interface-modules", {
+            "name": name,
+            "boardType": board_type,
+            "address": address,
         })
         return data["message"]
 

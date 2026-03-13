@@ -298,6 +298,85 @@ class TestAddMercuryControllerTool:
         assert "SDK failure" in result
 
 
+class TestAddInterfaceModuleTool:
+    """Tests for the add_interface_module MCP tool."""
+
+    def test_tool_is_registered(self):
+        """add_interface_module should be registered as an MCP tool."""
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "add_interface_module" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        """Tool should return error message when not connected."""
+        from genetec_mcp_server.server import add_interface_module
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_interface_module(
+            mock_ctx,
+            controller_guid="00000000-0000-0000-0000-000000000001",
+            name="Board-01",
+            board_type="MR50",
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_result_on_success(self):
+        """Tool should return success message on successful addition."""
+        from genetec_mcp_server.server import add_interface_module
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_interface_module.return_value = (
+            "MR50 'Board-01' added to controller 00000000-0000-0000-0000-000000000001"
+        )
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_interface_module(
+            mock_ctx,
+            controller_guid="00000000-0000-0000-0000-000000000001",
+            name="Board-01",
+            board_type="MR50",
+        )
+        assert "Board-01" in result
+        mock_conn.add_interface_module.assert_called_once_with(
+            controller_guid="00000000-0000-0000-0000-000000000001",
+            name="Board-01",
+            board_type="MR50",
+            address=0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        """Tool should return error message on RuntimeError."""
+        from genetec_mcp_server.server import add_interface_module
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_interface_module.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_interface_module(
+            mock_ctx,
+            controller_guid="00000000-0000-0000-0000-000000000001",
+            name="Board-01",
+            board_type="MR50",
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

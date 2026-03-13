@@ -64,3 +64,15 @@ public class MercuryControllerResponse
 {
     public string Message { get; set; } = string.Empty;
 }
+
+public class InterfaceModuleRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string BoardType { get; set; } = string.Empty;
+    public int Address { get; set; } = 0;
+}
+
+public class InterfaceModuleResponse
+{
+    public string Message { get; set; } = string.Empty;
+}

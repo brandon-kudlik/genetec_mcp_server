@@ -254,14 +254,12 @@ async def create_doors(
         doors: List of door definitions. Each dict must contain:
             - name (str, required): Display name for the door.
             - properties (dict, optional): Door configuration with:
-              - relockDelayInSeconds (int): Time before door relocks.
-              - standardEntryTimeInSeconds (int): Standard entry time.
-              - extendedEntryTimeInSeconds (int): Extended entry time.
-              - standardGrantTimeInSeconds (int): Standard grant time.
-              - extendedGrantTimeInSeconds (int): Extended grant time.
+              - relockDelayInSeconds (int): Time in seconds before door relocks.
+              - standardEntryTimeInSeconds (int): Standard entry time in seconds.
+              - extendedEntryTimeInSeconds (int): Extended entry time in seconds.
+              - standardGrantTimeInSeconds (int): Standard grant time in seconds (default 5).
+              - extendedGrantTimeInSeconds (int): Extended grant time in seconds (default 15).
               - relockOnClose (bool): Whether to relock when door closes.
-              - heldOpenEventsEnabled (bool): Enable held-open events.
-              - forcedOpenEventsEnabled (bool): Enable forced-open events.
 
     Returns:
         A summary of created doors with their GUIDs.

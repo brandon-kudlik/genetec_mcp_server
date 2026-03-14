@@ -26,7 +26,7 @@ public class DoorService
         var engine = _engineService.Engine;
         var results = new List<DoorResult>();
 
-        // Create a transaction via reflection (dynamic dispatch fails on SDK types)
+        // Create a transaction via reflection (dynamic dispatch fails on TransactionManager)
         var transactionManager = (object)engine.TransactionManager;
         var tmType = transactionManager.GetType();
         var createTxMethod = tmType.GetMethod("CreateTransaction")
@@ -46,35 +46,21 @@ public class DoorService
                     dynamic doorEntity = engine.CreateEntity(door.Name, EntityType.Door);
                     var doorGuid = (Guid)doorEntity.Guid;
 
-                    // Set door properties if provided
+                    // Set door properties if provided — all timing properties are UInt32
                     if (door.Properties != null)
                     {
-                        var doorObj = (object)doorEntity;
-                        var doorType = doorObj.GetType();
-
-                        SetPropertyIfProvided(doorType, doorObj, "RelockDelay",
-                            door.Properties.RelockDelayInSeconds.HasValue
-                                ? TimeSpan.FromSeconds(door.Properties.RelockDelayInSeconds.Value)
-                                : null);
-                        SetPropertyIfProvided(doorType, doorObj, "StandardEntryTime",
-                            door.Properties.StandardEntryTimeInSeconds.HasValue
-                                ? TimeSpan.FromSeconds(door.Properties.StandardEntryTimeInSeconds.Value)
-                                : null);
-                        SetPropertyIfProvided(doorType, doorObj, "ExtendedEntryTime",
-                            door.Properties.ExtendedEntryTimeInSeconds.HasValue
-                                ? TimeSpan.FromSeconds(door.Properties.ExtendedEntryTimeInSeconds.Value)
-                                : null);
-                        SetPropertyIfProvided(doorType, doorObj, "StandardGrantTime",
-                            door.Properties.StandardGrantTimeInSeconds.HasValue
-                                ? TimeSpan.FromSeconds(door.Properties.StandardGrantTimeInSeconds.Value)
-                                : null);
-                        SetPropertyIfProvided(doorType, doorObj, "ExtendedGrantTime",
-                            door.Properties.ExtendedGrantTimeInSeconds.HasValue
-                                ? TimeSpan.FromSeconds(door.Properties.ExtendedGrantTimeInSeconds.Value)
-                                : null);
-                        SetPropertyIfProvided(doorType, doorObj, "RelockOnClose", door.Properties.RelockOnClose);
-                        SetPropertyIfProvided(doorType, doorObj, "HeldOpenEventsEnabled", door.Properties.HeldOpenEventsEnabled);
-                        SetPropertyIfProvided(doorType, doorObj, "ForcedOpenEventsEnabled", door.Properties.ForcedOpenEventsEnabled);
+                        if (door.Properties.RelockDelayInSeconds.HasValue)
+                            doorEntity.RelockDelayInSeconds = (uint)door.Properties.RelockDelayInSeconds.Value;
+                        if (door.Properties.StandardEntryTimeInSeconds.HasValue)
+                            doorEntity.StandardEntryTimeInSeconds = (uint)door.Properties.StandardEntryTimeInSeconds.Value;
+                        if (door.Properties.ExtendedEntryTimeInSeconds.HasValue)
+                            doorEntity.ExtendedEntryTimeInSeconds = (uint)door.Properties.ExtendedEntryTimeInSeconds.Value;
+                        if (door.Properties.StandardGrantTimeInSeconds.HasValue)
+                            doorEntity.StandardGrantTimeInSeconds = (uint)door.Properties.StandardGrantTimeInSeconds.Value;
+                        if (door.Properties.ExtendedGrantTimeInSeconds.HasValue)
+                            doorEntity.ExtendedGrantTimeInSeconds = (uint)door.Properties.ExtendedGrantTimeInSeconds.Value;
+                        if (door.Properties.RelockOnClose.HasValue)
+                            doorEntity.RelockOnClose = door.Properties.RelockOnClose.Value;
                     }
 
                     results.Add(new DoorResult
@@ -141,6 +127,10 @@ public class DoorService
         var engine = _engineService.Engine;
         var results = new List<DoorHardwareResult>();
 
+        // Resolve AccessPointType enum via reflection
+        var accessPointTypeEnum = FindTypeByName("AccessPointType")
+            ?? throw new InvalidOperationException("Could not find AccessPointType enum in loaded assemblies.");
+
         // Create a transaction via reflection
         var transactionManager = (object)engine.TransactionManager;
         var tmType = transactionManager.GetType();
@@ -165,35 +155,37 @@ public class DoorService
                     var doorObj = (object)doorEntity;
                     var doorType = doorObj.GetType();
 
-                    // Configure entry side
+                    // Find AddConnection method: Guid AddConnection(Guid device, AccessPointType type)
+                    var addConnectionMethod = doorType.GetMethod("AddConnection")
+                        ?? throw new InvalidOperationException(
+                            $"Could not find AddConnection on {doorType.Name}.");
+
+                    // Configure entry side hardware via AddConnection
                     if (assignment.Hardware.EntrySide != null)
                     {
-                        ConfigureDoorSide(doorType, doorObj, "DoorSideIn", assignment.Hardware.EntrySide);
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.EntrySide.ReaderGuid, "CardReader");
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.EntrySide.RexGuid, "Rex");
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.EntrySide.DoorSensorGuid, "EntrySensor");
                     }
 
-                    // Configure exit side
+                    // Configure exit side hardware via AddConnection
                     if (assignment.Hardware.ExitSide != null)
                     {
-                        ConfigureDoorSide(doorType, doorObj, "DoorSideOut", assignment.Hardware.ExitSide);
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.ExitSide.ReaderGuid, "CardReader");
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.ExitSide.RexGuid, "Rex");
+                        AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                            assignment.Hardware.ExitSide.DoorSensorGuid, "EntrySensor");
                     }
 
-                    // Configure door lock
+                    // Configure door lock — DoorLockDevice is a writable Guid property
                     if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                     {
-                        var lockGuid = Guid.Parse(assignment.Hardware.DoorLockGuid);
-                        // Try setting DoorLock property or use SetDoorLock method
-                        var lockProp = doorType.GetProperty("DoorLock");
-                        if (lockProp != null && lockProp.CanWrite)
-                        {
-                            lockProp.SetValue(doorObj, lockGuid);
-                        }
-                        else
-                        {
-                            var setLockMethod = doorType.GetMethod("SetDoorLock")
-                                ?? doorType.GetMethod("SetLock");
-                            if (setLockMethod != null)
-                                setLockMethod.Invoke(doorObj, new object[] { lockGuid });
-                        }
+                        doorEntity.DoorLockDevice = Guid.Parse(assignment.Hardware.DoorLockGuid);
                     }
 
                     results.Add(new DoorHardwareResult
@@ -303,6 +295,26 @@ public class DoorService
                         results.Add($"    Method: {sMethod.ReturnType.Name} {sMethod.Name}({paramList})");
                     }
                 }
+
+                // Drill into DoorHeld / DoorForced sub-objects
+                if ((prop.Name == "DoorHeld" || prop.Name == "DoorForced") && val != null)
+                {
+                    var subType = val.GetType();
+                    results.Add($"    {prop.Name} type: {subType.FullName}");
+                    foreach (var sProp in subType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                    {
+                        try
+                        {
+                            var sVal = sProp.GetValue(val);
+                            var sRw = sProp.CanWrite ? "RW" : "RO";
+                            results.Add($"    [{sRw}] {sProp.PropertyType.Name} {sProp.Name} = {sVal}");
+                        }
+                        catch (Exception ex2)
+                        {
+                            results.Add($"    {sProp.PropertyType.Name} {sProp.Name} = ERROR: {ex2.InnerException?.Message ?? ex2.Message}");
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -318,67 +330,46 @@ public class DoorService
             results.Add($"  {method.ReturnType.Name} {method.Name}({paramList})");
         }
 
+        // Enumerate AccessPointType enum values
+        var accessPointTypeEnum = FindTypeByName("AccessPointType");
+        if (accessPointTypeEnum != null)
+        {
+            results.Add($"\nAccessPointType enum values:");
+            foreach (var name in Enum.GetNames(accessPointTypeEnum))
+            {
+                results.Add($"  {name} = {(int)Enum.Parse(accessPointTypeEnum, name)}");
+            }
+        }
+
         return results;
     }
 
-    private static void ConfigureDoorSide(Type doorType, object doorObj, string sidePropName, DoorSideHardware hardware)
+    private static void AddHardwareConnection(MethodInfo addConnectionMethod, object doorObj, Type accessPointTypeEnum, string? deviceGuid, string accessPointTypeName)
     {
-        var sideProp = doorType.GetProperty(sidePropName);
-        if (sideProp == null) return;
+        if (string.IsNullOrEmpty(deviceGuid)) return;
 
-        var sideObj = sideProp.GetValue(doorObj);
-        if (sideObj == null) return;
-
-        var sideType = sideObj.GetType();
-
-        if (!string.IsNullOrEmpty(hardware.ReaderGuid))
-        {
-            var readerGuid = Guid.Parse(hardware.ReaderGuid);
-            var readerProp = sideType.GetProperty("Reader");
-            if (readerProp != null && readerProp.CanWrite)
-                readerProp.SetValue(sideObj, readerGuid);
-            else
-            {
-                var setMethod = sideType.GetMethod("SetReader");
-                setMethod?.Invoke(sideObj, new object[] { readerGuid });
-            }
-        }
-
-        if (!string.IsNullOrEmpty(hardware.RexGuid))
-        {
-            var rexGuid = Guid.Parse(hardware.RexGuid);
-            var rexProp = sideType.GetProperty("Rex");
-            if (rexProp != null && rexProp.CanWrite)
-                rexProp.SetValue(sideObj, rexGuid);
-            else
-            {
-                var setMethod = sideType.GetMethod("SetRex");
-                setMethod?.Invoke(sideObj, new object[] { rexGuid });
-            }
-        }
-
-        if (!string.IsNullOrEmpty(hardware.DoorSensorGuid))
-        {
-            var sensorGuid = Guid.Parse(hardware.DoorSensorGuid);
-            var sensorProp = sideType.GetProperty("DoorSensor") ?? sideType.GetProperty("EntrySensor");
-            if (sensorProp != null && sensorProp.CanWrite)
-                sensorProp.SetValue(sideObj, sensorGuid);
-            else
-            {
-                var setMethod = sideType.GetMethod("SetDoorSensor") ?? sideType.GetMethod("SetEntrySensor");
-                setMethod?.Invoke(sideObj, new object[] { sensorGuid });
-            }
-        }
+        var device = Guid.Parse(deviceGuid);
+        var apType = Enum.Parse(accessPointTypeEnum, accessPointTypeName);
+        addConnectionMethod.Invoke(doorObj, new object[] { device, apType });
     }
 
-    private static void SetPropertyIfProvided(Type type, object obj, string propName, object? value)
+    private static Type? FindTypeByName(string typeName)
     {
-        if (value == null) return;
-        var prop = type.GetProperty(propName);
-        if (prop != null && prop.CanWrite)
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
         {
-            prop.SetValue(obj, value);
+            try
+            {
+                foreach (var t in asm.GetTypes())
+                {
+                    if (t.Name == typeName)
+                        return t;
+                }
+            }
+            catch (ReflectionTypeLoadException)
+            {
+                // Some assemblies may fail to enumerate types — skip them
+            }
         }
+        return null;
     }
-
 }

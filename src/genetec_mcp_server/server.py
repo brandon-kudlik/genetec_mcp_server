@@ -260,9 +260,6 @@ async def create_doors(
               - standardGrantTimeInSeconds (int): Standard grant time in seconds (default 5).
               - extendedGrantTimeInSeconds (int): Extended grant time in seconds (default 15).
               - relockOnClose (bool): Whether to relock when door closes.
-              - forcedOpenEventsEnabled (bool): Enable forced-open events (default true).
-              - heldOpenEventsEnabled (bool): Enable held-open events (default false).
-              - heldOpenTriggerTimeInSeconds (int): Held-open trigger time (default 30).
 
     Returns:
         A summary of created doors with their GUIDs.
@@ -298,6 +295,9 @@ async def configure_door_hardware(
                 - doorSensorGuid (str): GUID of the door sensor.
               - exitSide (dict, optional): Exit side hardware (same fields).
               - doorLockGuid (str, optional): GUID of the door lock output.
+              - forcedOpenEventsEnabled (bool, optional): Enable forced-open events (default true). Requires doorLockGuid.
+              - heldOpenEventsEnabled (bool, optional): Enable held-open events (default false). Requires doorLockGuid.
+              - heldOpenTriggerTimeInSeconds (int, optional): Held-open trigger time in seconds (default 30). Requires doorLockGuid.
 
     Returns:
         A summary of configured doors.

@@ -46,7 +46,7 @@ public class DoorService
                     dynamic doorEntity = engine.CreateEntity(door.Name, EntityType.Door);
                     var doorGuid = (Guid)doorEntity.Guid;
 
-                    // Set door properties if provided — all timing properties are UInt32
+                    // Set basic door properties — timing and relock (safe without hardware)
                     if (door.Properties != null)
                     {
                         if (door.Properties.RelockDelayInSeconds.HasValue)
@@ -61,46 +61,6 @@ public class DoorService
                             doorEntity.ExtendedGrantTimeInSeconds = (uint)door.Properties.ExtendedGrantTimeInSeconds.Value;
                         if (door.Properties.RelockOnClose.HasValue)
                             doorEntity.RelockOnClose = door.Properties.RelockOnClose.Value;
-
-                        // DoorForced.IsActive controls forced-open events
-                        if (door.Properties.ForcedOpenEventsEnabled.HasValue)
-                        {
-                            var doorObj = (object)doorEntity;
-                            var forcedProp = doorObj.GetType().GetProperty("DoorForced");
-                            if (forcedProp != null)
-                            {
-                                var forced = forcedProp.GetValue(doorObj);
-                                if (forced != null)
-                                {
-                                    var isActiveProp = forced.GetType().GetProperty("IsActive");
-                                    isActiveProp?.SetValue(forced, door.Properties.ForcedOpenEventsEnabled.Value);
-                                }
-                            }
-                        }
-
-                        // DoorHeld.IsActive controls held-open events
-                        if (door.Properties.HeldOpenEventsEnabled.HasValue || door.Properties.HeldOpenTriggerTimeInSeconds.HasValue)
-                        {
-                            var doorObj = (object)doorEntity;
-                            var heldProp = doorObj.GetType().GetProperty("DoorHeld");
-                            if (heldProp != null)
-                            {
-                                var held = heldProp.GetValue(doorObj);
-                                if (held != null)
-                                {
-                                    if (door.Properties.HeldOpenEventsEnabled.HasValue)
-                                    {
-                                        var isActiveProp = held.GetType().GetProperty("IsActive");
-                                        isActiveProp?.SetValue(held, door.Properties.HeldOpenEventsEnabled.Value);
-                                    }
-                                    if (door.Properties.HeldOpenTriggerTimeInSeconds.HasValue)
-                                    {
-                                        var triggerProp = held.GetType().GetProperty("TriggerTime");
-                                        triggerProp?.SetValue(held, door.Properties.HeldOpenTriggerTimeInSeconds.Value);
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     results.Add(new DoorResult
@@ -223,9 +183,48 @@ public class DoorService
                     }
 
                     // Configure door lock — DoorLockDevice is a writable Guid property
+                    // Must be set BEFORE DoorHeld/DoorForced (SDK requires a lock first)
                     if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                     {
                         doorEntity.DoorLockDevice = Guid.Parse(assignment.Hardware.DoorLockGuid);
+                    }
+
+                    // DoorForced.IsActive — requires DoorLockDevice to be set
+                    if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
+                    {
+                        var forcedProp = doorType.GetProperty("DoorForced");
+                        if (forcedProp != null)
+                        {
+                            var forced = forcedProp.GetValue(doorObj);
+                            if (forced != null)
+                            {
+                                var isActiveProp = forced.GetType().GetProperty("IsActive");
+                                isActiveProp?.SetValue(forced, assignment.Hardware.ForcedOpenEventsEnabled.Value);
+                            }
+                        }
+                    }
+
+                    // DoorHeld.IsActive + TriggerTime — requires DoorLockDevice to be set
+                    if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
+                    {
+                        var heldProp = doorType.GetProperty("DoorHeld");
+                        if (heldProp != null)
+                        {
+                            var held = heldProp.GetValue(doorObj);
+                            if (held != null)
+                            {
+                                if (assignment.Hardware.HeldOpenEventsEnabled.HasValue)
+                                {
+                                    var isActiveProp = held.GetType().GetProperty("IsActive");
+                                    isActiveProp?.SetValue(held, assignment.Hardware.HeldOpenEventsEnabled.Value);
+                                }
+                                if (assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
+                                {
+                                    var triggerProp = held.GetType().GetProperty("TriggerTime");
+                                    triggerProp?.SetValue(held, assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
+                                }
+                            }
+                        }
                     }
 
                     results.Add(new DoorHardwareResult

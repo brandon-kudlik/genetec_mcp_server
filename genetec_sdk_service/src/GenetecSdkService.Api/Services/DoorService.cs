@@ -61,6 +61,46 @@ public class DoorService
                             doorEntity.ExtendedGrantTimeInSeconds = (uint)door.Properties.ExtendedGrantTimeInSeconds.Value;
                         if (door.Properties.RelockOnClose.HasValue)
                             doorEntity.RelockOnClose = door.Properties.RelockOnClose.Value;
+
+                        // DoorForced.IsActive controls forced-open events
+                        if (door.Properties.ForcedOpenEventsEnabled.HasValue)
+                        {
+                            var doorObj = (object)doorEntity;
+                            var forcedProp = doorObj.GetType().GetProperty("DoorForced");
+                            if (forcedProp != null)
+                            {
+                                var forced = forcedProp.GetValue(doorObj);
+                                if (forced != null)
+                                {
+                                    var isActiveProp = forced.GetType().GetProperty("IsActive");
+                                    isActiveProp?.SetValue(forced, door.Properties.ForcedOpenEventsEnabled.Value);
+                                }
+                            }
+                        }
+
+                        // DoorHeld.IsActive controls held-open events
+                        if (door.Properties.HeldOpenEventsEnabled.HasValue || door.Properties.HeldOpenTriggerTimeInSeconds.HasValue)
+                        {
+                            var doorObj = (object)doorEntity;
+                            var heldProp = doorObj.GetType().GetProperty("DoorHeld");
+                            if (heldProp != null)
+                            {
+                                var held = heldProp.GetValue(doorObj);
+                                if (held != null)
+                                {
+                                    if (door.Properties.HeldOpenEventsEnabled.HasValue)
+                                    {
+                                        var isActiveProp = held.GetType().GetProperty("IsActive");
+                                        isActiveProp?.SetValue(held, door.Properties.HeldOpenEventsEnabled.Value);
+                                    }
+                                    if (door.Properties.HeldOpenTriggerTimeInSeconds.HasValue)
+                                    {
+                                        var triggerProp = held.GetType().GetProperty("TriggerTime");
+                                        triggerProp?.SetValue(held, door.Properties.HeldOpenTriggerTimeInSeconds.Value);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     results.Add(new DoorResult

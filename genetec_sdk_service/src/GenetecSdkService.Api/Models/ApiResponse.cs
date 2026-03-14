@@ -129,6 +129,9 @@ public class DoorProperties
     public uint? StandardGrantTimeInSeconds { get; set; }
     public uint? ExtendedGrantTimeInSeconds { get; set; }
     public bool? RelockOnClose { get; set; }
+    public bool? ForcedOpenEventsEnabled { get; set; }
+    public bool? HeldOpenEventsEnabled { get; set; }
+    public uint? HeldOpenTriggerTimeInSeconds { get; set; }
 }
 
 public class BatchCreateDoorsRequest

@@ -221,7 +221,7 @@ public class DoorService
                                 if (assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
                                 {
                                     var triggerProp = held.GetType().GetProperty("TriggerTime");
-                                    triggerProp?.SetValue(held, assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
+                                    triggerProp?.SetValue(held, (uint)assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
                                 }
                             }
                         }

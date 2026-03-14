@@ -123,11 +123,11 @@ public class CreateDoorItem
 
 public class DoorProperties
 {
-    public uint? RelockDelayInSeconds { get; set; }
-    public uint? StandardEntryTimeInSeconds { get; set; }
-    public uint? ExtendedEntryTimeInSeconds { get; set; }
-    public uint? StandardGrantTimeInSeconds { get; set; }
-    public uint? ExtendedGrantTimeInSeconds { get; set; }
+    public int? RelockDelayInSeconds { get; set; }
+    public int? StandardEntryTimeInSeconds { get; set; }
+    public int? ExtendedEntryTimeInSeconds { get; set; }
+    public int? StandardGrantTimeInSeconds { get; set; }
+    public int? ExtendedGrantTimeInSeconds { get; set; }
     public bool? RelockOnClose { get; set; }
 }
 
@@ -166,7 +166,7 @@ public class DoorHardwareConfig
     public DoorProperties? Properties { get; set; }
     public bool? ForcedOpenEventsEnabled { get; set; }
     public bool? HeldOpenEventsEnabled { get; set; }
-    public uint? HeldOpenTriggerTimeInSeconds { get; set; }
+    public int? HeldOpenTriggerTimeInSeconds { get; set; }
 }
 
 public class DoorHardwareAssignment

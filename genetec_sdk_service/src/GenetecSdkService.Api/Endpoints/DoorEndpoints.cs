@@ -37,7 +37,8 @@ public static class DoorEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail(ex.Message));
+                // Return 200 with error details instead of 400 to avoid swallowed messages
+                return Results.Ok(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail($"Validation: {ex.Message}"));
             }
             catch (InvalidOperationException ex)
             {
@@ -45,7 +46,7 @@ public static class DoorEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail(ex.Message));
+                return Results.Ok(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail($"{ex.GetType().Name}: {ex.Message}"));
             }
         });
 

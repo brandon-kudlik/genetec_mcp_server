@@ -335,9 +335,11 @@ public class DoorService
         if (accessPointTypeEnum != null)
         {
             results.Add($"\nAccessPointType enum values:");
+            var underlyingType = Enum.GetUnderlyingType(accessPointTypeEnum);
             foreach (var name in Enum.GetNames(accessPointTypeEnum))
             {
-                results.Add($"  {name} = {(int)Enum.Parse(accessPointTypeEnum, name)}");
+                var val = Enum.Parse(accessPointTypeEnum, name);
+                results.Add($"  {name} = {Convert.ChangeType(val, underlyingType)}");
             }
         }
 

@@ -250,16 +250,12 @@ async def create_doors(
 ) -> str:
     """Batch create door entities in Genetec Security Center.
 
+    Creates door entities only. Use configure_door_hardware to assign a lock
+    device, set timing properties, and link readers/sensors.
+
     Args:
         doors: List of door definitions. Each dict must contain:
             - name (str, required): Display name for the door.
-            - properties (dict, optional): Door configuration with:
-              - relockDelayInSeconds (int): Time in seconds before door relocks.
-              - standardEntryTimeInSeconds (int): Standard entry time in seconds.
-              - extendedEntryTimeInSeconds (int): Extended entry time in seconds.
-              - standardGrantTimeInSeconds (int): Standard grant time in seconds (default 5).
-              - extendedGrantTimeInSeconds (int): Extended grant time in seconds (default 15).
-              - relockOnClose (bool): Whether to relock when door closes.
 
     Returns:
         A summary of created doors with their GUIDs.
@@ -295,6 +291,13 @@ async def configure_door_hardware(
                 - doorSensorGuid (str): GUID of the door sensor.
               - exitSide (dict, optional): Exit side hardware (same fields).
               - doorLockGuid (str, optional): GUID of the door lock output.
+              - properties (dict, optional): Door timing/behavior settings (requires doorLockGuid):
+                - relockDelayInSeconds (int): Time before door relocks.
+                - standardEntryTimeInSeconds (int): Standard entry time.
+                - extendedEntryTimeInSeconds (int): Extended entry time.
+                - standardGrantTimeInSeconds (int): Standard grant time (default 5).
+                - extendedGrantTimeInSeconds (int): Extended grant time (default 15).
+                - relockOnClose (bool): Relock when door closes.
               - forcedOpenEventsEnabled (bool, optional): Enable forced-open events (default true). Requires doorLockGuid.
               - heldOpenEventsEnabled (bool, optional): Enable held-open events (default false). Requires doorLockGuid.
               - heldOpenTriggerTimeInSeconds (int, optional): Held-open trigger time in seconds (default 30). Requires doorLockGuid.

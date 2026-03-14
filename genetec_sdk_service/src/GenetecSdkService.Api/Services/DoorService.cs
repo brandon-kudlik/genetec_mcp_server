@@ -46,23 +46,6 @@ public class DoorService
                     dynamic doorEntity = engine.CreateEntity(door.Name, EntityType.Door);
                     var doorGuid = (Guid)doorEntity.Guid;
 
-                    // Set basic door properties — timing and relock (safe without hardware)
-                    if (door.Properties != null)
-                    {
-                        if (door.Properties.RelockDelayInSeconds.HasValue)
-                            doorEntity.RelockDelayInSeconds = (uint)door.Properties.RelockDelayInSeconds.Value;
-                        if (door.Properties.StandardEntryTimeInSeconds.HasValue)
-                            doorEntity.StandardEntryTimeInSeconds = (uint)door.Properties.StandardEntryTimeInSeconds.Value;
-                        if (door.Properties.ExtendedEntryTimeInSeconds.HasValue)
-                            doorEntity.ExtendedEntryTimeInSeconds = (uint)door.Properties.ExtendedEntryTimeInSeconds.Value;
-                        if (door.Properties.StandardGrantTimeInSeconds.HasValue)
-                            doorEntity.StandardGrantTimeInSeconds = (uint)door.Properties.StandardGrantTimeInSeconds.Value;
-                        if (door.Properties.ExtendedGrantTimeInSeconds.HasValue)
-                            doorEntity.ExtendedGrantTimeInSeconds = (uint)door.Properties.ExtendedGrantTimeInSeconds.Value;
-                        if (door.Properties.RelockOnClose.HasValue)
-                            doorEntity.RelockOnClose = door.Properties.RelockOnClose.Value;
-                    }
-
                     results.Add(new DoorResult
                     {
                         Name = door.Name,
@@ -183,10 +166,27 @@ public class DoorService
                     }
 
                     // Configure door lock — DoorLockDevice is a writable Guid property
-                    // Must be set BEFORE DoorHeld/DoorForced (SDK requires a lock first)
+                    // Must be set BEFORE any other door properties (SDK requires a lock first)
                     if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                     {
                         doorEntity.DoorLockDevice = Guid.Parse(assignment.Hardware.DoorLockGuid);
+                    }
+
+                    // Set door properties — all require DoorLockDevice to be set first
+                    if (assignment.Hardware.Properties != null)
+                    {
+                        if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
+                            doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
+                        if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
+                            doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
+                            doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
+                            doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
+                            doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.RelockOnClose.HasValue)
+                            doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
                     }
 
                     // DoorForced.IsActive — requires DoorLockDevice to be set

@@ -42,30 +42,13 @@ public class DoorService
 
                 try
                 {
-                    // Create door entity via reflection
-                    var entityManager = (object)engine.EntityManager;
-                    var emType = entityManager.GetType();
-
-                    // Find EntityType.Door enum value
-                    var entityTypeEnum = FindTypeByName("EntityType")
-                        ?? throw new InvalidOperationException("Could not find EntityType enum.");
-                    var doorEntityType = Enum.Parse(entityTypeEnum, "Door");
-
-                    // CreateEntity(name, entityType) — returns Guid
-                    var createMethod = emType.GetMethods()
-                        .FirstOrDefault(m => m.Name == "CreateEntity"
-                            && m.GetParameters().Length == 2
-                            && m.GetParameters()[0].ParameterType == typeof(string))
-                        ?? throw new InvalidOperationException(
-                            $"Could not find CreateEntity(string, EntityType) on EntityManager. " +
-                            $"Available methods: {string.Join(", ", emType.GetMethods().Where(m => m.Name == "CreateEntity").Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"))})").Distinct())}");
-
-                    var doorGuid = (Guid)createMethod.Invoke(entityManager, new object[] { door.Name, doorEntityType })!;
+                    // Create door entity using dynamic dispatch (same pattern as CardholderService)
+                    dynamic doorEntity = engine.CreateEntity(door.Name, EntityType.Door);
+                    var doorGuid = (Guid)doorEntity.Guid;
 
                     // Set door properties if provided
                     if (door.Properties != null)
                     {
-                        dynamic doorEntity = engine.GetEntity(doorGuid);
                         var doorObj = (object)doorEntity;
                         var doorType = doorObj.GetType();
 
@@ -398,23 +381,4 @@ public class DoorService
         }
     }
 
-    private static Type? FindTypeByName(string typeName)
-    {
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                foreach (var t in asm.GetTypes())
-                {
-                    if (t.Name == typeName)
-                        return t;
-                }
-            }
-            catch (ReflectionTypeLoadException)
-            {
-                // Some assemblies may fail to enumerate types — skip them
-            }
-        }
-        return null;
-    }
 }

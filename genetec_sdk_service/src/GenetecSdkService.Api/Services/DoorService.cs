@@ -279,14 +279,14 @@ public class DoorService
                     Status = "Configured",
                 });
             }
-            catch (TargetInvocationException ex) when (ex.InnerException != null)
+            catch (TargetInvocationException ex)
             {
-                var inner = ex.InnerException;
+                var inner = ex.InnerException ?? ex;
                 while (inner.InnerException != null) inner = inner.InnerException;
                 results.Add(new DoorHardwareResult
                 {
                     DoorGuid = assignment.DoorGuid,
-                    Status = $"Failed: {inner.Message}",
+                    Status = $"Failed: [{inner.GetType().Name}] {inner.Message} | Stack: {inner.StackTrace?.Split('\n').FirstOrDefault()?.Trim()}",
                 });
             }
             catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
@@ -294,7 +294,7 @@ public class DoorService
                 results.Add(new DoorHardwareResult
                 {
                     DoorGuid = assignment.DoorGuid,
-                    Status = $"Failed: {ex.Message}",
+                    Status = $"Failed: [{ex.GetType().Name}] {ex.Message}",
                 });
             }
         }

@@ -206,70 +206,54 @@ public class DoorService
                     doorObj = (object)doorEntity;
                     doorType = doorObj.GetType();
 
-                    createTxMethod.Invoke(transactionManager, null);
-                    try
+                    // Set properties WITHOUT a transaction — CardholderService
+                    // doesn't use transactions for property writes either
+                    if (assignment.Hardware.Properties != null)
                     {
-                        if (assignment.Hardware.Properties != null)
-                        {
-                            if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
-                                doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
-                            if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
-                                doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
-                            if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
-                                doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
-                            if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
-                                doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
-                            if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
-                                doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
-                            if (assignment.Hardware.Properties.RelockOnClose.HasValue)
-                                doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
-                        }
-
-                        // DoorForced.IsActive
-                        if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
-                        {
-                            var forcedProp = doorType.GetProperty("DoorForced");
-                            var forced = forcedProp?.GetValue(doorObj);
-                            if (forced != null)
-                            {
-                                var isActiveProp = forced.GetType().GetProperty("IsActive");
-                                isActiveProp?.SetValue(forced, assignment.Hardware.ForcedOpenEventsEnabled.Value);
-                            }
-                        }
-
-                        // DoorHeld.IsActive + TriggerTime
-                        if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
-                        {
-                            var heldProp = doorType.GetProperty("DoorHeld");
-                            var held = heldProp?.GetValue(doorObj);
-                            if (held != null)
-                            {
-                                if (assignment.Hardware.HeldOpenEventsEnabled.HasValue)
-                                {
-                                    var isActiveProp = held.GetType().GetProperty("IsActive");
-                                    isActiveProp?.SetValue(held, assignment.Hardware.HeldOpenEventsEnabled.Value);
-                                }
-                                if (assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
-                                {
-                                    var triggerProp = held.GetType().GetProperty("TriggerTime");
-                                    triggerProp?.SetValue(held, (uint)assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
-                                }
-                            }
-                        }
-
-                        if (commitMethod.GetParameters().Length == 1)
-                            commitMethod.Invoke(transactionManager, new object[] { true });
-                        else
-                            commitMethod.Invoke(transactionManager, null);
+                        if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
+                            doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
+                        if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
+                            doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
+                            doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
+                            doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
+                            doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
+                        if (assignment.Hardware.Properties.RelockOnClose.HasValue)
+                            doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
                     }
-                    catch
+
+                    // DoorForced.IsActive
+                    if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
                     {
-                        if (rollbackMethod != null)
+                        var forcedProp = doorType.GetProperty("DoorForced");
+                        var forced = forcedProp?.GetValue(doorObj);
+                        if (forced != null)
                         {
-                            try { rollbackMethod.Invoke(transactionManager, null); }
-                            catch { /* best-effort rollback */ }
+                            var isActiveProp = forced.GetType().GetProperty("IsActive");
+                            isActiveProp?.SetValue(forced, assignment.Hardware.ForcedOpenEventsEnabled.Value);
                         }
-                        throw;
+                    }
+
+                    // DoorHeld.IsActive + TriggerTime
+                    if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
+                    {
+                        var heldProp = doorType.GetProperty("DoorHeld");
+                        var held = heldProp?.GetValue(doorObj);
+                        if (held != null)
+                        {
+                            if (assignment.Hardware.HeldOpenEventsEnabled.HasValue)
+                            {
+                                var isActiveProp = held.GetType().GetProperty("IsActive");
+                                isActiveProp?.SetValue(held, assignment.Hardware.HeldOpenEventsEnabled.Value);
+                            }
+                            if (assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
+                            {
+                                var triggerProp = held.GetType().GetProperty("TriggerTime");
+                                triggerProp?.SetValue(held, (uint)assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
+                            }
+                        }
                     }
                 }
 

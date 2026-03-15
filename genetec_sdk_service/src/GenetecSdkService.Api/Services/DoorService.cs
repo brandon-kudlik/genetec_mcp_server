@@ -134,10 +134,11 @@ public class DoorService
                     ?? throw new InvalidOperationException(
                         $"Could not find AddConnection on {doorType.Name}.");
 
-                // Step 1: Set DoorLockDevice directly (no transaction)
+                // Step 1: Set door lock via AddConnection with AccessPointType.DoorLock
                 if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                 {
-                    doorEntity.DoorLockDevice = Guid.Parse(assignment.Hardware.DoorLockGuid);
+                    AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                        assignment.Hardware.DoorLockGuid, "DoorLock");
                 }
 
                 // Step 2: Hardware connections via AddConnection (no transaction)

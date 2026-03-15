@@ -114,31 +114,38 @@ public class DoorService
         var accessPointTypeEnum = FindTypeByName("AccessPointType")
             ?? throw new InvalidOperationException("Could not find AccessPointType enum in loaded assemblies.");
 
-        // Create a transaction via reflection
+        // Transaction helper methods via reflection
         var transactionManager = (object)engine.TransactionManager;
         var tmType = transactionManager.GetType();
         var createTxMethod = tmType.GetMethod("CreateTransaction")
             ?? throw new InvalidOperationException("Could not find CreateTransaction on TransactionManager.");
-        createTxMethod.Invoke(transactionManager, null);
+        var commitMethod = tmType.GetMethods()
+            .FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == typeof(bool))
+            ?? tmType.GetMethods().FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 0)
+            ?? throw new InvalidOperationException("Could not find CommitTransaction on TransactionManager.");
+        var rollbackMethod = tmType.GetMethod("RollbackTransaction");
 
-        try
+        foreach (var assignment in request.Assignments)
         {
-            foreach (var assignment in request.Assignments)
-            {
-                if (string.IsNullOrWhiteSpace(assignment.DoorGuid))
-                    throw new ArgumentException("Each assignment must contain a 'doorGuid'.");
+            if (string.IsNullOrWhiteSpace(assignment.DoorGuid))
+                throw new ArgumentException("Each assignment must contain a 'doorGuid'.");
 
+            try
+            {
+                var doorGuid = Guid.Parse(assignment.DoorGuid);
+                dynamic doorEntity = engine.GetEntity(doorGuid);
+                if (doorEntity == null)
+                    throw new InvalidOperationException($"Door entity not found: {assignment.DoorGuid}");
+
+                var doorObj = (object)doorEntity;
+                var doorType = doorObj.GetType();
+
+                // --- Transaction 1: Hardware connections + lock ---
+                createTxMethod.Invoke(transactionManager, null);
                 try
                 {
-                    var doorGuid = Guid.Parse(assignment.DoorGuid);
-                    dynamic doorEntity = engine.GetEntity(doorGuid);
-                    if (doorEntity == null)
-                        throw new InvalidOperationException($"Door entity not found: {assignment.DoorGuid}");
-
-                    var doorObj = (object)doorEntity;
-                    var doorType = doorObj.GetType();
-
-                    // Find AddConnection method: Guid AddConnection(Guid device, AccessPointType type)
+                    // Find AddConnection method
                     var addConnectionMethod = doorType.GetMethod("AddConnection")
                         ?? throw new InvalidOperationException(
                             $"Could not find AddConnection on {doorType.Name}.");
@@ -165,52 +172,76 @@ public class DoorService
                             assignment.Hardware.ExitSide.DoorSensorGuid, "EntrySensor");
                     }
 
-                    // Configure door lock — DoorLockDevice is a writable Guid property
-                    // Must be set BEFORE any other door properties (SDK requires a lock first)
+                    // Configure door lock
                     if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                     {
                         doorEntity.DoorLockDevice = Guid.Parse(assignment.Hardware.DoorLockGuid);
                     }
 
-                    // Set door properties — all require DoorLockDevice to be set first
-                    if (assignment.Hardware.Properties != null)
+                    if (commitMethod.GetParameters().Length == 1)
+                        commitMethod.Invoke(transactionManager, new object[] { true });
+                    else
+                        commitMethod.Invoke(transactionManager, null);
+                }
+                catch
+                {
+                    if (rollbackMethod != null)
                     {
-                        if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
-                            doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
-                        if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
-                            doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
-                        if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
-                            doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
-                        if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
-                            doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
-                        if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
-                            doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
-                        if (assignment.Hardware.Properties.RelockOnClose.HasValue)
-                            doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
+                        try { rollbackMethod.Invoke(transactionManager, null); }
+                        catch { /* best-effort rollback */ }
                     }
+                    throw;
+                }
 
-                    // DoorForced.IsActive — requires DoorLockDevice to be set
-                    if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
+                // --- Transaction 2: Properties + events (require lock to be committed first) ---
+                bool hasProperties = assignment.Hardware.Properties != null
+                    || assignment.Hardware.ForcedOpenEventsEnabled.HasValue
+                    || assignment.Hardware.HeldOpenEventsEnabled.HasValue
+                    || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue;
+
+                if (hasProperties)
+                {
+                    // Re-fetch the entity to pick up committed lock state
+                    doorEntity = engine.GetEntity(doorGuid);
+                    doorObj = (object)doorEntity;
+                    doorType = doorObj.GetType();
+
+                    createTxMethod.Invoke(transactionManager, null);
+                    try
                     {
-                        var forcedProp = doorType.GetProperty("DoorForced");
-                        if (forcedProp != null)
+                        if (assignment.Hardware.Properties != null)
                         {
-                            var forced = forcedProp.GetValue(doorObj);
+                            if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
+                                doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
+                            if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
+                                doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
+                            if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
+                                doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
+                            if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
+                                doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
+                            if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
+                                doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
+                            if (assignment.Hardware.Properties.RelockOnClose.HasValue)
+                                doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
+                        }
+
+                        // DoorForced.IsActive
+                        if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
+                        {
+                            var forcedProp = doorType.GetProperty("DoorForced");
+                            var forced = forcedProp?.GetValue(doorObj);
                             if (forced != null)
                             {
                                 var isActiveProp = forced.GetType().GetProperty("IsActive");
                                 isActiveProp?.SetValue(forced, assignment.Hardware.ForcedOpenEventsEnabled.Value);
                             }
                         }
-                    }
 
-                    // DoorHeld.IsActive + TriggerTime — requires DoorLockDevice to be set
-                    if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
-                    {
-                        var heldProp = doorType.GetProperty("DoorHeld");
-                        if (heldProp != null)
+                        // DoorHeld.IsActive + TriggerTime
+                        if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
                         {
-                            var held = heldProp.GetValue(doorObj);
+                            var heldProp = doorType.GetProperty("DoorHeld");
+                            var held = heldProp?.GetValue(doorObj);
                             if (held != null)
                             {
                                 if (assignment.Hardware.HeldOpenEventsEnabled.HasValue)
@@ -225,52 +256,47 @@ public class DoorService
                                 }
                             }
                         }
+
+                        if (commitMethod.GetParameters().Length == 1)
+                            commitMethod.Invoke(transactionManager, new object[] { true });
+                        else
+                            commitMethod.Invoke(transactionManager, null);
                     }
+                    catch
+                    {
+                        if (rollbackMethod != null)
+                        {
+                            try { rollbackMethod.Invoke(transactionManager, null); }
+                            catch { /* best-effort rollback */ }
+                        }
+                        throw;
+                    }
+                }
 
-                    results.Add(new DoorHardwareResult
-                    {
-                        DoorGuid = assignment.DoorGuid,
-                        Status = "Configured",
-                    });
-                }
-                catch (TargetInvocationException ex) when (ex.InnerException != null)
+                results.Add(new DoorHardwareResult
                 {
-                    results.Add(new DoorHardwareResult
-                    {
-                        DoorGuid = assignment.DoorGuid,
-                        Status = $"Failed: {ex.InnerException.Message}",
-                    });
-                }
-                catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
-                {
-                    results.Add(new DoorHardwareResult
-                    {
-                        DoorGuid = assignment.DoorGuid,
-                        Status = $"Failed: {ex.Message}",
-                    });
-                }
+                    DoorGuid = assignment.DoorGuid,
+                    Status = "Configured",
+                });
             }
-
-            // Commit the transaction
-            var commitMethod = tmType.GetMethods()
-                .FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 1
-                    && m.GetParameters()[0].ParameterType == typeof(bool))
-                ?? tmType.GetMethods().FirstOrDefault(m => m.Name == "CommitTransaction" && m.GetParameters().Length == 0)
-                ?? throw new InvalidOperationException("Could not find CommitTransaction on TransactionManager.");
-            if (commitMethod.GetParameters().Length == 1)
-                commitMethod.Invoke(transactionManager, new object[] { true });
-            else
-                commitMethod.Invoke(transactionManager, null);
-        }
-        catch
-        {
-            var rollbackMethod = tmType.GetMethod("RollbackTransaction");
-            if (rollbackMethod != null)
+            catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
-                try { rollbackMethod.Invoke(transactionManager, null); }
-                catch { /* best-effort rollback */ }
+                var inner = ex.InnerException;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                results.Add(new DoorHardwareResult
+                {
+                    DoorGuid = assignment.DoorGuid,
+                    Status = $"Failed: {inner.Message}",
+                });
             }
-            throw;
+            catch (Exception ex) when (ex is not ArgumentException && ex is not InvalidOperationException)
+            {
+                results.Add(new DoorHardwareResult
+                {
+                    DoorGuid = assignment.DoorGuid,
+                    Status = $"Failed: {ex.Message}",
+                });
+            }
         }
 
         return new BatchConfigureDoorHardwareResponse

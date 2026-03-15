@@ -279,28 +279,21 @@ async def configure_door_hardware(
     ctx: Context,
     assignments: list[dict[str, Any]],
 ) -> str:
-    """Link hardware (readers, inputs, outputs) to door sides in Genetec Security Center.
+    """Assign hardware devices (lock, readers, REX, sensors) to doors in Genetec Security Center.
+
+    Uses AddConnection to link IO devices from Mercury controller interface boards
+    to door access points. Each device can only be assigned to one door at a time.
 
     Args:
         assignments: List of hardware assignments. Each dict must contain:
             - doorGuid (str, required): GUID of the door to configure.
             - hardware (dict, required): Hardware configuration with:
+              - doorLockGuid (str, optional): GUID of the output device for the door lock.
               - entrySide (dict, optional): Entry side hardware:
                 - readerGuid (str): GUID of the reader device.
-                - rexGuid (str): GUID of the REX (request-to-exit) device.
-                - doorSensorGuid (str): GUID of the door sensor.
-              - exitSide (dict, optional): Exit side hardware (same fields).
-              - doorLockGuid (str, optional): GUID of the door lock output.
-              - properties (dict, optional): Door timing/behavior settings (requires doorLockGuid):
-                - relockDelayInSeconds (int): Time before door relocks.
-                - standardEntryTimeInSeconds (int): Standard entry time.
-                - extendedEntryTimeInSeconds (int): Extended entry time.
-                - standardGrantTimeInSeconds (int): Standard grant time (default 5).
-                - extendedGrantTimeInSeconds (int): Extended grant time (default 15).
-                - relockOnClose (bool): Relock when door closes.
-              - forcedOpenEventsEnabled (bool, optional): Enable forced-open events (default true). Requires doorLockGuid.
-              - heldOpenEventsEnabled (bool, optional): Enable held-open events (default false). Requires doorLockGuid.
-              - heldOpenTriggerTimeInSeconds (int, optional): Held-open trigger time in seconds (default 30). Requires doorLockGuid.
+                - rexGuid (str): GUID of the REX (request-to-exit) input device.
+                - doorSensorGuid (str): GUID of the door sensor input device.
+              - exitSide (dict, optional): Exit side hardware (same fields as entrySide).
 
     Returns:
         A summary of configured doors.

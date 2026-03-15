@@ -134,14 +134,14 @@ public class DoorService
                     ?? throw new InvalidOperationException(
                         $"Could not find AddConnection on {doorType.Name}.");
 
-                // Step 1: Set door lock via AddConnection with AccessPointType.DoorLock
+                // Assign door lock via AddConnection with AccessPointType.DoorLock
                 if (!string.IsNullOrEmpty(assignment.Hardware.DoorLockGuid))
                 {
                     AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
                         assignment.Hardware.DoorLockGuid, "DoorLock");
                 }
 
-                // Step 2: Hardware connections via AddConnection (no transaction)
+                // Entry side hardware connections
                 if (assignment.Hardware.EntrySide != null)
                 {
                     AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
@@ -152,6 +152,7 @@ public class DoorService
                         assignment.Hardware.EntrySide.DoorSensorGuid, "EntrySensor");
                 }
 
+                // Exit side hardware connections
                 if (assignment.Hardware.ExitSide != null)
                 {
                     AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
@@ -160,55 +161,6 @@ public class DoorService
                         assignment.Hardware.ExitSide.RexGuid, "Rex");
                     AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
                         assignment.Hardware.ExitSide.DoorSensorGuid, "EntrySensor");
-                }
-
-                // Step 3: Set timing/behavior properties (no transaction)
-                if (assignment.Hardware.Properties != null)
-                {
-                    if (assignment.Hardware.Properties.RelockDelayInSeconds.HasValue)
-                        doorEntity.RelockDelayInSeconds = (uint)assignment.Hardware.Properties.RelockDelayInSeconds.Value;
-                    if (assignment.Hardware.Properties.StandardEntryTimeInSeconds.HasValue)
-                        doorEntity.StandardEntryTimeInSeconds = (uint)assignment.Hardware.Properties.StandardEntryTimeInSeconds.Value;
-                    if (assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.HasValue)
-                        doorEntity.ExtendedEntryTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedEntryTimeInSeconds.Value;
-                    if (assignment.Hardware.Properties.StandardGrantTimeInSeconds.HasValue)
-                        doorEntity.StandardGrantTimeInSeconds = (uint)assignment.Hardware.Properties.StandardGrantTimeInSeconds.Value;
-                    if (assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.HasValue)
-                        doorEntity.ExtendedGrantTimeInSeconds = (uint)assignment.Hardware.Properties.ExtendedGrantTimeInSeconds.Value;
-                    if (assignment.Hardware.Properties.RelockOnClose.HasValue)
-                        doorEntity.RelockOnClose = assignment.Hardware.Properties.RelockOnClose.Value;
-                }
-
-                // Step 4: DoorForced.IsActive
-                if (assignment.Hardware.ForcedOpenEventsEnabled.HasValue)
-                {
-                    var forcedProp = doorType.GetProperty("DoorForced");
-                    var forced = forcedProp?.GetValue(doorObj);
-                    if (forced != null)
-                    {
-                        var isActiveProp = forced.GetType().GetProperty("IsActive");
-                        isActiveProp?.SetValue(forced, assignment.Hardware.ForcedOpenEventsEnabled.Value);
-                    }
-                }
-
-                // Step 5: DoorHeld.IsActive + TriggerTime
-                if (assignment.Hardware.HeldOpenEventsEnabled.HasValue || assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
-                {
-                    var heldProp = doorType.GetProperty("DoorHeld");
-                    var held = heldProp?.GetValue(doorObj);
-                    if (held != null)
-                    {
-                        if (assignment.Hardware.HeldOpenEventsEnabled.HasValue)
-                        {
-                            var isActiveProp = held.GetType().GetProperty("IsActive");
-                            isActiveProp?.SetValue(held, assignment.Hardware.HeldOpenEventsEnabled.Value);
-                        }
-                        if (assignment.Hardware.HeldOpenTriggerTimeInSeconds.HasValue)
-                        {
-                            var triggerProp = held.GetType().GetProperty("TriggerTime");
-                            triggerProp?.SetValue(held, (uint)assignment.Hardware.HeldOpenTriggerTimeInSeconds.Value);
-                        }
-                    }
                 }
 
                 results.Add(new DoorHardwareResult

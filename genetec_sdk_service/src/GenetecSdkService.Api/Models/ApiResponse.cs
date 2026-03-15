@@ -163,10 +163,6 @@ public class DoorHardwareConfig
     public DoorSideHardware? EntrySide { get; set; }
     public DoorSideHardware? ExitSide { get; set; }
     public string? DoorLockGuid { get; set; }
-    public DoorProperties? Properties { get; set; }
-    public bool? ForcedOpenEventsEnabled { get; set; }
-    public bool? HeldOpenEventsEnabled { get; set; }
-    public int? HeldOpenTriggerTimeInSeconds { get; set; }
 }
 
 public class DoorHardwareAssignment

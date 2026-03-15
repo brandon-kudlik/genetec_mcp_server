@@ -46,7 +46,9 @@ public static class DoorEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail($"{ex.GetType().Name}: {ex.Message}"));
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                return Results.Ok(ApiResponse<BatchConfigureDoorHardwareResponse>.Fail($"{ex.GetType().Name}: {inner.Message}"));
             }
         });
 

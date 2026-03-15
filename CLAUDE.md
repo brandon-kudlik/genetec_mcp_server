@@ -56,12 +56,14 @@ genetec_sdk_service/
       GenetecEngineService.cs     # Singleton: Engine lifecycle, connect/disconnect
       CardholderService.cs        # Cardholder CRUD operations
       AccessControlService.cs     # Cloudlink enrollment, Mercury controllers
+      AlarmService.cs             # Alarm entity creation
     Models/
       ApiResponse.cs              # Request/response models + API envelope
     Endpoints/
       SystemEndpoints.cs          # GET /api/health, GET /api/system/version
       CardholderEndpoints.cs      # POST /api/cardholders
       AccessControlEndpoints.cs   # POST /api/units/cloudlink, POST /api/units/{guid}/mercury, POST /api/units/{guid}/interface-modules
+      AlarmEndpoints.cs           # POST /api/alarms
 ```
 
 ## Development Workflow: Red/Green TDD
@@ -110,6 +112,7 @@ Follow strict red/green TDD for all new features:
 | POST | `/api/units/cloudlink` | Enroll Cloudlink unit |
 | POST | `/api/units/{guid}/mercury` | Add Mercury sub-controller |
 | POST | `/api/units/{guid}/controllers/{guid}/interface-modules` | Add interface board to Mercury controller |
+| POST | `/api/alarms` | Create alarm entity |
 
 ### Entity Hierarchy
 ```

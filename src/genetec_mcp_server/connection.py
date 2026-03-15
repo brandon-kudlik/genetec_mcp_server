@@ -350,6 +350,38 @@ class GenetecConnection:
 
         return self._post("/api/doors/hardware/batch", {"assignments": assignments})
 
+    def create_alarm(
+        self,
+        name: str,
+        priority: Optional[int] = None,
+        rearm_threshold: Optional[int] = None,
+    ) -> str:
+        """Create an alarm entity via the SDK service.
+
+        Args:
+            name: Display name for the alarm (required).
+            priority: Alarm priority level (optional).
+            rearm_threshold: Seconds before the alarm can re-trigger (optional).
+
+        Returns:
+            The GUID string of the newly created alarm.
+
+        Raises:
+            ValueError: If name is empty.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not name:
+            raise ValueError("name is required and cannot be empty.")
+
+        body: dict[str, Any] = {"name": name}
+        if priority is not None:
+            body["priority"] = priority
+        if rearm_threshold is not None:
+            body["rearmThreshold"] = rearm_threshold
+
+        data = self._post("/api/alarms", body)
+        return data["guid"]
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 

@@ -187,3 +187,17 @@ public class BatchConfigureDoorHardwareResponse
     public List<DoorHardwareResult> Results { get; set; } = new();
     public int ConfiguredCount { get; set; }
 }
+
+// Alarm models
+
+public class AlarmRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public int? Priority { get; set; }
+    public int? RearmThreshold { get; set; }
+}
+
+public class AlarmResponse
+{
+    public string Guid { get; set; } = string.Empty;
+}

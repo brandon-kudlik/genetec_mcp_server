@@ -578,3 +578,63 @@ class TestConfigureDoorHardware:
             with pytest.raises(RuntimeError, match="Door not found"):
                 conn.configure_door_hardware(assignments=[{"doorGuid": "door-1", "hardware": {}}])
         conn.dispose()
+
+
+class TestCreateAlarm:
+    """Tests for creating alarms."""
+
+    def test_returns_guid_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "alarm-guid-123"}}
+            )
+            guid = conn.create_alarm(name="Fire Alarm")
+        assert guid == "alarm-guid-123"
+        conn.dispose()
+
+    def test_requires_name(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="name"):
+            conn.create_alarm(name="")
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "alarm-guid-123"}}
+            )
+            conn.create_alarm(name="Fire Alarm", priority=5, rearm_threshold=30)
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body["name"] == "Fire Alarm"
+            assert body["priority"] == 5
+            assert body["rearmThreshold"] == 30
+            mock_post.assert_called_once_with(
+                "/api/alarms",
+                json=body,
+            )
+        conn.dispose()
+
+    def test_sends_only_name_when_no_optionals(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "alarm-guid-123"}}
+            )
+            conn.create_alarm(name="Door Forced")
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body == {"name": "Door Forced"}
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Failed to create alarm."}
+            )
+            with pytest.raises(RuntimeError, match="Failed to create alarm"):
+                conn.create_alarm(name="Fire Alarm")
+        conn.dispose()

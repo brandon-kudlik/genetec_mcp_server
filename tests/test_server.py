@@ -665,6 +665,81 @@ class TestConfigureDoorHardwareTool:
         assert "SDK failure" in result
 
 
+class TestCreateAlarmTool:
+    """Tests for the create_alarm MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "create_alarm" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import create_alarm
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_alarm(mock_ctx, name="Fire Alarm")
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_guid_on_success(self):
+        from genetec_mcp_server.server import create_alarm
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_alarm.return_value = "alarm-guid-123"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_alarm(mock_ctx, name="Fire Alarm")
+        assert "alarm-guid-123" in result
+        mock_conn.create_alarm.assert_called_once_with(
+            name="Fire Alarm",
+            priority=None,
+            rearm_threshold=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_passes_optional_fields(self):
+        from genetec_mcp_server.server import create_alarm
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_alarm.return_value = "alarm-guid-456"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        await create_alarm(mock_ctx, name="Intrusion", priority=3, rearm_threshold=60)
+        mock_conn.create_alarm.assert_called_once_with(
+            name="Intrusion",
+            priority=3,
+            rearm_threshold=60,
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import create_alarm
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_alarm.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_alarm(mock_ctx, name="Fire Alarm")
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

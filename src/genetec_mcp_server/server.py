@@ -354,3 +354,34 @@ async def configure_io_devices(
         return f"Configured {result.get('configuredCount', 0)} device(s): {result.get('message', 'OK')}"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def create_alarm(
+    ctx: Context,
+    name: str,
+    priority: Optional[int] = None,
+    rearm_threshold: Optional[int] = None,
+) -> str:
+    """Create an alarm entity in Genetec Security Center.
+
+    Args:
+        name: Display name for the alarm.
+        priority: Alarm priority level (optional). Higher values = higher priority.
+        rearm_threshold: Seconds before the alarm can re-trigger (optional).
+
+    Returns:
+        The GUID of the newly created alarm, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        guid = connection.create_alarm(
+            name=name,
+            priority=priority,
+            rearm_threshold=rearm_threshold,
+        )
+        return f"Alarm created: {name} (GUID: {guid})"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"

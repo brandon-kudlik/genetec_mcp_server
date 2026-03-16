@@ -16,7 +16,7 @@ public static class EventToActionEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(ApiResponse<AddEventToActionResponse>.Fail(ex.Message));
+                return Results.Ok(ApiResponse<AddEventToActionResponse>.Fail($"Validation: {ex.Message}"));
             }
             catch (InvalidOperationException ex)
             {

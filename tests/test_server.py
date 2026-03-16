@@ -740,6 +740,78 @@ class TestCreateAlarmTool:
         assert "SDK failure" in result
 
 
+class TestAddEventToActionTool:
+    """Tests for the add_event_to_action MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "add_event_to_action" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import add_event_to_action
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_event_to_action(mock_ctx, mappings=[{
+            "entityGuid": "door-1",
+            "eventType": "DoorHeldTooLong",
+            "actionType": "TriggerAlarm",
+            "alarmGuid": "alarm-1",
+        }])
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_success_message(self):
+        from genetec_mcp_server.server import add_event_to_action
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_event_to_action.return_value = {
+            "results": [
+                {"entityGuid": "door-1", "eventType": "DoorHeldTooLong", "status": "Added"},
+                {"entityGuid": "door-1", "eventType": "DoorForcedOpen", "status": "Added"},
+            ],
+            "addedCount": 2,
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_event_to_action(mock_ctx, mappings=[
+            {"entityGuid": "door-1", "eventType": "DoorHeldTooLong", "actionType": "TriggerAlarm", "alarmGuid": "alarm-1"},
+            {"entityGuid": "door-1", "eventType": "DoorForcedOpen", "actionType": "TriggerAlarm", "alarmGuid": "alarm-1"},
+        ])
+        assert "2" in result
+        mock_conn.add_event_to_action.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import add_event_to_action
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.add_event_to_action.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await add_event_to_action(mock_ctx, mappings=[{
+            "entityGuid": "door-1",
+            "eventType": "DoorHeldTooLong",
+            "actionType": "TriggerAlarm",
+            "alarmGuid": "alarm-1",
+        }])
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

@@ -57,6 +57,7 @@ genetec_sdk_service/
       CardholderService.cs        # Cardholder CRUD operations
       AccessControlService.cs     # Cloudlink enrollment, Mercury controllers
       AlarmService.cs             # Alarm entity creation
+      EventToActionService.cs     # Event-to-action mapping on entities
     Models/
       ApiResponse.cs              # Request/response models + API envelope
     Endpoints/
@@ -64,6 +65,7 @@ genetec_sdk_service/
       CardholderEndpoints.cs      # POST /api/cardholders
       AccessControlEndpoints.cs   # POST /api/units/cloudlink, POST /api/units/{guid}/mercury, POST /api/units/{guid}/interface-modules
       AlarmEndpoints.cs           # POST /api/alarms
+      EventToActionEndpoints.cs   # POST /api/event-to-actions
 ```
 
 ## Development Workflow: Red/Green TDD
@@ -113,6 +115,7 @@ Follow strict red/green TDD for all new features:
 | POST | `/api/units/{guid}/mercury` | Add Mercury sub-controller |
 | POST | `/api/units/{guid}/controllers/{guid}/interface-modules` | Add interface board to Mercury controller |
 | POST | `/api/alarms` | Create alarm entity |
+| POST | `/api/event-to-actions` | Add event-to-action mappings to entities |
 
 ### Entity Hierarchy
 ```

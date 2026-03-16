@@ -32,6 +32,7 @@ builder.Services.AddSingleton<CardholderService>();
 builder.Services.AddSingleton<AccessControlService>();
 builder.Services.AddSingleton<DoorService>();
 builder.Services.AddSingleton<AlarmService>();
+builder.Services.AddSingleton<EventToActionService>();
 
 var app = builder.Build();
 
@@ -41,5 +42,6 @@ app.MapCardholderEndpoints();
 app.MapAccessControlEndpoints();
 app.MapDoorEndpoints();
 app.MapAlarmEndpoints();
+app.MapEventToActionEndpoints();
 
 app.Run();

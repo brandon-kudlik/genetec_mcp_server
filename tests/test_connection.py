@@ -638,3 +638,108 @@ class TestCreateAlarm:
             with pytest.raises(RuntimeError, match="Failed to create alarm"):
                 conn.create_alarm(name="Fire Alarm")
         conn.dispose()
+
+
+class TestAddEventToAction:
+    """Tests for adding event-to-action mappings."""
+
+    def test_returns_result_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {
+                    "message": "Added 2 event-to-action(s).",
+                    "addedCount": 2,
+                    "results": [
+                        {"entityGuid": "door-1", "eventType": "DoorHeldTooLong", "status": "Added"},
+                        {"entityGuid": "door-1", "eventType": "DoorForcedOpen", "status": "Added"},
+                    ],
+                }}
+            )
+            result = conn.add_event_to_action(mappings=[
+                {
+                    "entityGuid": "door-1",
+                    "eventType": "DoorHeldTooLong",
+                    "actionType": "TriggerAlarm",
+                    "alarmGuid": "alarm-1",
+                },
+                {
+                    "entityGuid": "door-1",
+                    "eventType": "DoorForcedOpen",
+                    "actionType": "TriggerAlarm",
+                    "alarmGuid": "alarm-1",
+                },
+            ])
+        assert result["addedCount"] == 2
+        assert len(result["results"]) == 2
+        conn.dispose()
+
+    def test_requires_non_empty_mappings(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="mappings.*cannot be empty"):
+            conn.add_event_to_action(mappings=[])
+        conn.dispose()
+
+    def test_requires_entity_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="entityGuid"):
+            conn.add_event_to_action(mappings=[{
+                "eventType": "DoorHeldTooLong",
+                "actionType": "TriggerAlarm",
+                "alarmGuid": "alarm-1",
+            }])
+        conn.dispose()
+
+    def test_requires_event_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="eventType"):
+            conn.add_event_to_action(mappings=[{
+                "entityGuid": "door-1",
+                "actionType": "TriggerAlarm",
+                "alarmGuid": "alarm-1",
+            }])
+        conn.dispose()
+
+    def test_requires_action_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="actionType"):
+            conn.add_event_to_action(mappings=[{
+                "entityGuid": "door-1",
+                "eventType": "DoorHeldTooLong",
+                "alarmGuid": "alarm-1",
+            }])
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"message": "OK", "addedCount": 1, "results": []}}
+            )
+            mappings = [{
+                "entityGuid": "door-1",
+                "eventType": "DoorForcedOpen",
+                "actionType": "TriggerAlarm",
+                "alarmGuid": "alarm-1",
+            }]
+            conn.add_event_to_action(mappings=mappings)
+            mock_post.assert_called_once_with(
+                "/api/event-to-actions",
+                json={"mappings": mappings},
+            )
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Entity not found."}
+            )
+            with pytest.raises(RuntimeError, match="Entity not found"):
+                conn.add_event_to_action(mappings=[{
+                    "entityGuid": "door-1",
+                    "eventType": "DoorHeldTooLong",
+                    "actionType": "TriggerAlarm",
+                    "alarmGuid": "alarm-1",
+                }])
+        conn.dispose()

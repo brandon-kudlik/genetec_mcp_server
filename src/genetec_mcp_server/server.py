@@ -385,3 +385,44 @@ async def create_alarm(
         return f"Alarm created: {name} (GUID: {guid})"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def add_event_to_action(
+    ctx: Context,
+    mappings: list[dict[str, Any]],
+) -> str:
+    """Add event-to-action mappings to entities in Genetec Security Center.
+
+    Links entity events (e.g. door held, door forced) to actions (e.g. trigger alarm).
+    This is how you configure a door to trigger an alarm when a specific event occurs.
+
+    Args:
+        mappings: List of event-to-action definitions. Each dict must contain:
+            - entityGuid (str, required): GUID of the source entity (e.g. a door).
+            - eventType (str, required): Event type name. Common door events:
+              'DoorHeldTooLong', 'DoorForcedOpen', 'DoorOpenTooLong',
+              'AccessGranted', 'AccessDenied'.
+            - actionType (str, required): Action type name. Currently supported:
+              'TriggerAlarm'.
+            - alarmGuid (str, optional): GUID of the alarm to trigger
+              (required when actionType is 'TriggerAlarm').
+
+    Returns:
+        A summary of added event-to-action mappings.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.add_event_to_action(mappings=mappings)
+        count = result.get("addedCount", 0)
+        lines = [f"Added {count} event-to-action mapping(s):"]
+        for r in result.get("results", []):
+            lines.append(
+                f"- {r.get('entityGuid', 'Unknown')} | {r.get('eventType', '')} → "
+                f"{r.get('actionType', '')} | {r.get('status', '')}"
+            )
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"

@@ -201,3 +201,33 @@ public class AlarmResponse
 {
     public string Guid { get; set; } = string.Empty;
 }
+
+// Event-to-action models
+
+public class EventToActionMapping
+{
+    public string EntityGuid { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty;
+    public string ActionType { get; set; } = string.Empty;
+    public string? AlarmGuid { get; set; }
+}
+
+public class AddEventToActionRequest
+{
+    public List<EventToActionMapping> Mappings { get; set; } = new();
+}
+
+public class EventToActionResult
+{
+    public string EntityGuid { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty;
+    public string ActionType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+}
+
+public class AddEventToActionResponse
+{
+    public List<EventToActionResult> Results { get; set; } = new();
+    public int AddedCount { get; set; }
+    public string Message { get; set; } = string.Empty;
+}

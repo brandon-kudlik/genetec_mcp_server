@@ -382,6 +382,35 @@ class GenetecConnection:
         data = self._post("/api/alarms", body)
         return data["guid"]
 
+    def add_event_to_action(self, mappings: list[dict[str, Any]]) -> dict[str, Any]:
+        """Add event-to-action mappings to entities via the SDK service.
+
+        Args:
+            mappings: List of mapping dicts. Each must contain:
+                - entityGuid (str): GUID of the source entity (e.g. door).
+                - eventType (str): Event type name (e.g. 'DoorHeldTooLong', 'DoorForcedOpen').
+                - actionType (str): Action type name (e.g. 'TriggerAlarm').
+                - alarmGuid (str, optional): GUID of the alarm to trigger (for TriggerAlarm actions).
+
+        Returns:
+            Response dict with 'results' list and 'addedCount'.
+
+        Raises:
+            ValueError: If mappings are invalid.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not mappings:
+            raise ValueError("mappings is required and cannot be empty.")
+        for m in mappings:
+            if not m.get("entityGuid"):
+                raise ValueError("Each mapping must contain an 'entityGuid'.")
+            if not m.get("eventType"):
+                raise ValueError("Each mapping must contain an 'eventType'.")
+            if not m.get("actionType"):
+                raise ValueError("Each mapping must contain an 'actionType'.")
+
+        return self._post("/api/event-to-actions", {"mappings": mappings})
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 

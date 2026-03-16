@@ -390,6 +390,44 @@ async def create_alarm(
 
 
 @mcp.tool()
+async def create_access_rules(
+    ctx: Context,
+    access_rules: list[dict[str, Any]],
+) -> str:
+    """Batch create access rules (access levels) in Genetec Security Center and assign doors.
+
+    Creates permanent access rules and optionally assigns doors to each rule.
+    Access rules control which cardholders can access which doors.
+
+    Args:
+        access_rules: List of access rule definitions. Each dict must contain:
+            - name (str, required): Display name for the access rule.
+            - doorGuids (list[str], optional): GUIDs of doors to assign to this rule.
+            - side (str, optional): Which side of the door the rule applies to.
+              Values: 'Both' (default), 'Entry', 'Exit'.
+
+    Returns:
+        A summary of created access rules with their GUIDs and door assignment counts.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.create_access_rules(access_rules=access_rules)
+        count = result.get("createdCount", 0)
+        lines = [f"Created {count} access rule(s):"]
+        for r in result.get("results", []):
+            doors = r.get("doorsAssigned", 0)
+            lines.append(
+                f"- {r.get('name', 'Unknown')}: {r.get('guid', 'N/A')} "
+                f"({doors} door(s) assigned) ({r.get('status', '')})"
+            )
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def add_event_to_action(
     ctx: Context,
     mappings: list[dict[str, Any]],

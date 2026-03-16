@@ -382,6 +382,29 @@ class GenetecConnection:
         data = self._post("/api/alarms", body)
         return data["guid"]
 
+    def create_access_rules(self, access_rules: list[dict[str, Any]]) -> dict[str, Any]:
+        """Batch create access rules and assign doors via the SDK service.
+
+        Args:
+            access_rules: List of access rule dicts. Each must contain 'name'
+                and optionally 'doorGuids' (list of door GUID strings) and
+                'side' ('Both', 'Entry', or 'Exit').
+
+        Returns:
+            Response dict with 'results' list and 'createdCount'.
+
+        Raises:
+            ValueError: If access_rules list is empty or a rule is missing 'name'.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not access_rules:
+            raise ValueError("access_rules is required and cannot be empty.")
+        for rule in access_rules:
+            if not rule.get("name"):
+                raise ValueError("Each access rule must contain a 'name'.")
+
+        return self._post("/api/access-rules/batch", {"accessRules": access_rules})
+
     def add_event_to_action(self, mappings: list[dict[str, Any]]) -> dict[str, Any]:
         """Add event-to-action mappings to entities via the SDK service.
 

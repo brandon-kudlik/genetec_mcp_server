@@ -231,3 +231,31 @@ public class AddEventToActionResponse
     public int AddedCount { get; set; }
     public string Message { get; set; } = string.Empty;
 }
+
+// Access rule models
+
+public class AccessRuleItem
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> DoorGuids { get; set; } = new();
+    public string Side { get; set; } = "Both";
+}
+
+public class BatchCreateAccessRulesRequest
+{
+    public List<AccessRuleItem> AccessRules { get; set; } = new();
+}
+
+public class AccessRuleResult
+{
+    public string Name { get; set; } = string.Empty;
+    public string Guid { get; set; } = string.Empty;
+    public int DoorsAssigned { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class BatchCreateAccessRulesResponse
+{
+    public List<AccessRuleResult> Results { get; set; } = new();
+    public int CreatedCount { get; set; }
+}

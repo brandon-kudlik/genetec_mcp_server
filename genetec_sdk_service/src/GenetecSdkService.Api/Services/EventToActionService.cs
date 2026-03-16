@@ -213,18 +213,26 @@ public class EventToActionService
         }
         info["existingMappings"] = existingMappings;
 
-        // List relevant EventType values (door-related subset)
-        var eventTypeEnum = FindTypeByName("EventType");
-        if (eventTypeEnum != null)
+        // List entity's supported events (from SupportedEvents property)
+        var supportedEventsProp = entityType.GetProperty("SupportedEvents");
+        if (supportedEventsProp != null)
         {
-            var doorEvents = Enum.GetNames(eventTypeEnum)
-                .Where(n => n.Contains("Door", StringComparison.OrdinalIgnoreCase)
-                    || n.Contains("Access", StringComparison.OrdinalIgnoreCase)
-                    || n.Contains("Held", StringComparison.OrdinalIgnoreCase)
-                    || n.Contains("Forced", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(n => n)
-                .ToList();
-            info["doorRelatedEventTypes"] = doorEvents;
+            try
+            {
+                var supportedEvents = supportedEventsProp.GetValue(entityObj);
+                if (supportedEvents is System.Collections.IEnumerable enumerable)
+                {
+                    var supported = new List<string>();
+                    foreach (var ev in enumerable)
+                        supported.Add(ev.ToString()!);
+                    supported.Sort();
+                    info["supportedEvents"] = supported;
+                }
+            }
+            catch (Exception ex)
+            {
+                info["supportedEventsError"] = ex.Message;
+            }
         }
 
         // List ActionType enum values

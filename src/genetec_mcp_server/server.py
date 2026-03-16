@@ -401,8 +401,8 @@ async def add_event_to_action(
         mappings: List of event-to-action definitions. Each dict must contain:
             - entityGuid (str, required): GUID of the source entity (e.g. a door).
             - eventType (str, required): Event type name. Common door events:
-              'DoorHeldTooLong', 'DoorForcedOpen', 'DoorOpenTooLong',
-              'AccessGranted', 'AccessDenied'.
+              'DoorForcedOpen', 'DoorOpenedForTooLong', 'DoorOpen', 'DoorClose',
+              'DoorLock', 'DoorUnlock', 'AccessGranted', 'AccessRefused'.
             - actionType (str, required): Action type name. Currently supported:
               'TriggerAlarm'.
             - alarmGuid (str, optional): GUID of the alarm to trigger

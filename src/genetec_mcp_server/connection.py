@@ -388,7 +388,7 @@ class GenetecConnection:
         Args:
             access_rules: List of access rule dicts. Each must contain 'name'
                 and optionally 'doorGuids' (list of door GUID strings) and
-                'side' ('Both', 'Entry', or 'Exit').
+                'side' ('Both', 'In', or 'Out').
 
         Returns:
             Response dict with 'results' list and 'createdCount'.

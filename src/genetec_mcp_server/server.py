@@ -404,7 +404,7 @@ async def create_access_rules(
             - name (str, required): Display name for the access rule.
             - doorGuids (list[str], optional): GUIDs of doors to assign to this rule.
             - side (str, optional): Which side of the door the rule applies to.
-              Values: 'Both' (default), 'Entry', 'Exit'.
+              Values: 'Both' (default), 'In', 'Out'.
 
     Returns:
         A summary of created access rules with their GUIDs and door assignment counts.

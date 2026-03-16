@@ -155,7 +155,6 @@ public class DoorSideHardware
 {
     public string? ReaderGuid { get; set; }
     public string? RexGuid { get; set; }
-    public string? DoorSensorGuid { get; set; }
 }
 
 public class DoorHardwareConfig
@@ -163,6 +162,7 @@ public class DoorHardwareConfig
     public DoorSideHardware? EntrySide { get; set; }
     public DoorSideHardware? ExitSide { get; set; }
     public string? DoorLockGuid { get; set; }
+    public string? DoorSensorGuid { get; set; }
 }
 
 public class DoorHardwareAssignment

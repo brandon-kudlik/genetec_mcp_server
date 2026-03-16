@@ -289,10 +289,12 @@ async def configure_door_hardware(
             - doorGuid (str, required): GUID of the door to configure.
             - hardware (dict, required): Hardware configuration with:
               - doorLockGuid (str, optional): GUID of the output device for the door lock.
+              - doorSensorGuid (str, optional): GUID of the door contact sensor input
+                device (AccessPointType.DoorSensor). Detects physical open/closed state.
+                Required for DoorForcedOpen events.
               - entrySide (dict, optional): Entry side hardware:
                 - readerGuid (str): GUID of the reader device.
                 - rexGuid (str): GUID of the REX (request-to-exit) input device.
-                - doorSensorGuid (str): GUID of the door sensor input device.
               - exitSide (dict, optional): Exit side hardware (same fields as entrySide).
 
     Returns:

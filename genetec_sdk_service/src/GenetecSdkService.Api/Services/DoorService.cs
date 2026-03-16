@@ -144,6 +144,13 @@ public class DoorService
                         assignment.Hardware.DoorLockGuid, "DoorLock");
                 }
 
+                // Assign door sensor via AddConnection with AccessPointType.DoorSensor
+                if (!string.IsNullOrEmpty(assignment.Hardware.DoorSensorGuid))
+                {
+                    AddHardwareConnection(addConnectionMethod, doorObj, accessPointTypeEnum,
+                        assignment.Hardware.DoorSensorGuid, "DoorSensor");
+                }
+
                 // Entry side: use UpdateConnection on pre-existing DoorSideIn access points
                 if (assignment.Hardware.EntrySide != null)
                 {
@@ -323,13 +330,6 @@ public class DoorService
             dynamic rex = doorSide.Rex;
             var accessPointGuid = (Guid)rex.Guid;
             updateConnectionMethod.Invoke(doorObj, new object[] { accessPointGuid, Guid.Parse(hardware.RexGuid) });
-        }
-
-        if (!string.IsNullOrEmpty(hardware.DoorSensorGuid))
-        {
-            dynamic sensor = doorSide.EntrySensor;
-            var accessPointGuid = (Guid)sensor.Guid;
-            updateConnectionMethod.Invoke(doorObj, new object[] { accessPointGuid, Guid.Parse(hardware.DoorSensorGuid) });
         }
     }
 

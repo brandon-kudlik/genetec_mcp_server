@@ -74,10 +74,12 @@ public class AccessRuleService
                             throw new InvalidOperationException($"Door entity not found: {doorGuidStr}");
 
                         // Call door.AddAccessRule(ruleGuid, side) via reflection
+                        // Multiple overloads exist — select the 2-parameter one (Guid, AccessRuleSide)
                         var doorObj = (object)doorEntity;
-                        var addAccessRuleMethod = doorObj.GetType().GetMethod("AddAccessRule")
+                        var addAccessRuleMethod = doorObj.GetType().GetMethods()
+                            .FirstOrDefault(m => m.Name == "AddAccessRule" && m.GetParameters().Length == 2)
                             ?? throw new InvalidOperationException(
-                                $"Could not find AddAccessRule on {doorObj.GetType().Name}.");
+                                $"Could not find AddAccessRule(Guid, AccessRuleSide) on {doorObj.GetType().Name}.");
                         addAccessRuleMethod.Invoke(doorObj, new object[] { ruleGuid, sideValue });
                         doorsAssigned++;
                     }

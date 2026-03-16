@@ -194,7 +194,7 @@ public class AlarmRequest
 {
     public string Name { get; set; } = string.Empty;
     public int? Priority { get; set; }
-    public int? RearmThreshold { get; set; }
+    public int? ReactivationThreshold { get; set; }
 }
 
 public class AlarmResponse

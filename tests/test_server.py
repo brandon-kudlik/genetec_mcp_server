@@ -703,7 +703,7 @@ class TestCreateAlarmTool:
         mock_conn.create_alarm.assert_called_once_with(
             name="Fire Alarm",
             priority=None,
-            rearm_threshold=None,
+            reactivation_threshold=None,
         )
 
     @pytest.mark.asyncio
@@ -717,11 +717,11 @@ class TestCreateAlarmTool:
         mock_ctx = MagicMock()
         mock_ctx.request_context.lifespan_context.connection = mock_conn
 
-        await create_alarm(mock_ctx, name="Intrusion", priority=3, rearm_threshold=60)
+        await create_alarm(mock_ctx, name="Intrusion", priority=3, reactivation_threshold=60)
         mock_conn.create_alarm.assert_called_once_with(
             name="Intrusion",
             priority=3,
-            rearm_threshold=60,
+            reactivation_threshold=60,
         )
 
     @pytest.mark.asyncio

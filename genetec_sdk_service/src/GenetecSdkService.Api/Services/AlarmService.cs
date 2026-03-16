@@ -28,10 +28,10 @@ public class AlarmService
         dynamic alarm = engine.CreateEntity(request.Name, EntityType.Alarm);
 
         if (request.Priority.HasValue)
-            alarm.Priority = request.Priority.Value;
+            alarm.Priority = (byte)request.Priority.Value;
 
-        if (request.RearmThreshold.HasValue)
-            alarm.RearmThreshold = request.RearmThreshold.Value;
+        if (request.ReactivationThreshold.HasValue)
+            alarm.ReactivationThreshold = TimeSpan.FromSeconds(request.ReactivationThreshold.Value);
 
         return new AlarmResponse { Guid = alarm.Guid.ToString() };
     }

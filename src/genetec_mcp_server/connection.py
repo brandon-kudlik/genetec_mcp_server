@@ -354,14 +354,14 @@ class GenetecConnection:
         self,
         name: str,
         priority: Optional[int] = None,
-        rearm_threshold: Optional[int] = None,
+        reactivation_threshold: Optional[int] = None,
     ) -> str:
         """Create an alarm entity via the SDK service.
 
         Args:
             name: Display name for the alarm (required).
-            priority: Alarm priority level (optional).
-            rearm_threshold: Seconds before the alarm can re-trigger (optional).
+            priority: Alarm priority level 1-255 (optional). Lower values = higher priority.
+            reactivation_threshold: Seconds before the alarm can re-trigger (optional).
 
         Returns:
             The GUID string of the newly created alarm.
@@ -376,8 +376,8 @@ class GenetecConnection:
         body: dict[str, Any] = {"name": name}
         if priority is not None:
             body["priority"] = priority
-        if rearm_threshold is not None:
-            body["rearmThreshold"] = rearm_threshold
+        if reactivation_threshold is not None:
+            body["reactivationThreshold"] = reactivation_threshold
 
         data = self._post("/api/alarms", body)
         return data["guid"]

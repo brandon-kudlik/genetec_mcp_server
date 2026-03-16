@@ -605,12 +605,12 @@ class TestCreateAlarm:
             mock_post.return_value = _mock_response(
                 {"success": True, "data": {"guid": "alarm-guid-123"}}
             )
-            conn.create_alarm(name="Fire Alarm", priority=5, rearm_threshold=30)
+            conn.create_alarm(name="Fire Alarm", priority=5, reactivation_threshold=30)
             call_args = mock_post.call_args
             body = call_args.kwargs.get("json") or call_args[1].get("json")
             assert body["name"] == "Fire Alarm"
             assert body["priority"] == 5
-            assert body["rearmThreshold"] == 30
+            assert body["reactivationThreshold"] == 30
             mock_post.assert_called_once_with(
                 "/api/alarms",
                 json=body,

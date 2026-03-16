@@ -361,14 +361,14 @@ async def create_alarm(
     ctx: Context,
     name: str,
     priority: Optional[int] = None,
-    rearm_threshold: Optional[int] = None,
+    reactivation_threshold: Optional[int] = None,
 ) -> str:
     """Create an alarm entity in Genetec Security Center.
 
     Args:
         name: Display name for the alarm.
-        priority: Alarm priority level (optional). Higher values = higher priority.
-        rearm_threshold: Seconds before the alarm can re-trigger (optional).
+        priority: Alarm priority level 1-255 (optional). Lower values = higher priority.
+        reactivation_threshold: Seconds before the alarm can re-trigger (optional).
 
     Returns:
         The GUID of the newly created alarm, or an error message.
@@ -380,7 +380,7 @@ async def create_alarm(
         guid = connection.create_alarm(
             name=name,
             priority=priority,
-            rearm_threshold=rearm_threshold,
+            reactivation_threshold=reactivation_threshold,
         )
         return f"Alarm created: {name} (GUID: {guid})"
     except (RuntimeError, ValueError) as e:

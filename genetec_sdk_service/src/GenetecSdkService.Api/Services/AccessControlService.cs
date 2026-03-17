@@ -588,6 +588,136 @@ public class AccessControlService
     }
 
     /// <summary>
+    /// Diagnostic: inspect EntityType enum values and query results for unit discovery.
+    /// </summary>
+    public List<string> DiagnoseCloudlinkQuery()
+    {
+        if (!_engineService.IsConnected)
+            throw new InvalidOperationException("Not connected to Security Center.");
+
+        var results = new List<string>();
+
+        try
+        {
+            var engine = _engineService.Engine;
+
+            // List all EntityType enum values
+            var entityTypeEnum = FindTypeByName("EntityType");
+            if (entityTypeEnum != null)
+            {
+                var unitRelated = Enum.GetNames(entityTypeEnum)
+                    .Where(n => n.Contains("Unit", StringComparison.OrdinalIgnoreCase)
+                             || n.Contains("Access", StringComparison.OrdinalIgnoreCase)
+                             || n.Contains("Cloud", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(n => n)
+                    .ToList();
+                results.Add($"EntityType values matching Unit/Access/Cloud: {string.Join(", ", unitRelated)}");
+                results.Add($"Total EntityType values: {Enum.GetNames(entityTypeEnum).Length}");
+            }
+
+            // List all ReportType enum values that might be relevant
+            var reportTypeEnum = FindTypeByName("ReportType");
+            if (reportTypeEnum != null)
+            {
+                var relevant = Enum.GetNames(reportTypeEnum)
+                    .Where(n => n.Contains("Entity", StringComparison.OrdinalIgnoreCase)
+                             || n.Contains("Unit", StringComparison.OrdinalIgnoreCase)
+                             || n.Contains("Access", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(n => n)
+                    .ToList();
+                results.Add($"ReportType values matching Entity/Unit/Access: {string.Join(", ", relevant)}");
+            }
+
+            // Try querying with EntityType.Unit
+            if (entityTypeEnum != null && reportTypeEnum != null)
+            {
+                var entityConfigValue = Enum.Parse(reportTypeEnum, "EntityConfiguration");
+                var reportManager = (object)engine.ReportManager;
+                var rmType = reportManager.GetType();
+                var createQueryMethod = rmType.GetMethods()
+                    .FirstOrDefault(m => m.Name == "CreateReportQuery" && m.GetParameters().Length == 1
+                        && m.GetParameters()[0].ParameterType == reportTypeEnum);
+
+                if (createQueryMethod != null)
+                {
+                    // Try Unit first
+                    var unitValue = Enum.Parse(entityTypeEnum, "Unit");
+                    var queryObj = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
+                    var queryType = queryObj.GetType();
+                    var filterProp = queryType.GetProperty("EntityTypeFilter");
+                    var filterObj = filterProp!.GetValue(queryObj)!;
+                    var addMethod = filterObj.GetType().GetMethods()
+                        .FirstOrDefault(m => m.Name == "Add" && m.GetParameters().Length >= 1
+                            && m.GetParameters()[0].ParameterType == entityTypeEnum);
+                    addMethod!.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
+
+                    var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes)
+                        ?? queryType.GetMethods().First(m => m.Name == "Query");
+                    dynamic queryResult = queryMethod.Invoke(queryObj, null)!;
+
+                    int rowCount = queryResult.Data.Rows.Count;
+                    results.Add($"EntityType.Unit query returned {rowCount} row(s)");
+
+                    // Show first 10 results with their types
+                    int shown = 0;
+                    foreach (System.Data.DataRow row in queryResult.Data.Rows)
+                    {
+                        if (shown >= 10) break;
+                        // List column names on first row
+                        if (shown == 0)
+                        {
+                            var colNames = new List<string>();
+                            foreach (System.Data.DataColumn col in row.Table.Columns)
+                                colNames.Add($"{col.ColumnName} ({col.DataType.Name})");
+                            results.Add($"Columns: {string.Join(", ", colNames)}");
+                        }
+
+                        Guid guid;
+                        if (row.Table.Columns.Contains("Guid"))
+                            guid = (Guid)row["Guid"];
+                        else if (row.Table.Columns.Contains("EntityGuid"))
+                            guid = (Guid)row["EntityGuid"];
+                        else
+                        {
+                            results.Add($"Row {shown}: no Guid/EntityGuid column found");
+                            shown++;
+                            continue;
+                        }
+
+                        dynamic entity = engine.GetEntity(guid);
+                        if (entity == null)
+                        {
+                            results.Add($"Row {shown}: {guid} -> entity is null");
+                            shown++;
+                            continue;
+                        }
+
+                        var entityObj = (object)entity;
+                        var typeName = entityObj.GetType().Name;
+                        var nameProp = entityObj.GetType().GetProperty("Name");
+                        var name = nameProp?.GetValue(entityObj)?.ToString() ?? "?";
+
+                        var extProp = entityObj.GetType().GetProperty("AccessControlUnitExtensionType")
+                            ?? entityObj.GetType().GetProperty("ExtensionType");
+                        var extVal = extProp?.GetValue(entityObj)?.ToString() ?? "N/A";
+
+                        results.Add($"Row {shown}: {guid} | Type={typeName} | Name={name} | ExtensionType={extVal}");
+                        shown++;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add($"Error: {ex.GetType().Name}: {ex.Message}");
+            if (ex.InnerException != null)
+                results.Add($"Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Diagnostic: inspect builder methods for a given unit GUID.
     /// </summary>
     public List<string> InspectBuilderMethods(string unitGuid)

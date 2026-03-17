@@ -139,6 +139,19 @@ public static class AccessControlEndpoints
             }
         });
 
+        app.MapGet("/api/debug/cloudlink-query", (AccessControlService service) =>
+        {
+            try
+            {
+                var info = service.DiagnoseCloudlinkQuery();
+                return Results.Ok(ApiResponse<List<string>>.Ok(info));
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(ApiResponse<List<string>>.Fail(ex.InnerException?.Message ?? ex.Message));
+            }
+        });
+
         app.MapGet("/api/debug/mercury-test/{unitGuid}", (string unitGuid, AccessControlService service) =>
         {
             var diagnostics = new List<string>();

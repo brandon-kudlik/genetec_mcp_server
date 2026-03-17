@@ -485,7 +485,7 @@ public class AccessControlService
         }
     }
 
-    public QueryCloudlinksResponse QueryCloudlinks()
+    public async Task<QueryCloudlinksResponse> QueryCloudlinksAsync()
     {
         if (!_engineService.IsConnected)
             throw new InvalidOperationException("Not connected to Security Center.");
@@ -510,37 +510,56 @@ public class AccessControlService
                 .FirstOrDefault(m => m.Name == "CreateReportQuery" && m.GetParameters().Length == 1
                     && m.GetParameters()[0].ParameterType == reportTypeEnum)
                 ?? throw new InvalidOperationException(
-                    $"Could not find CreateReportQuery({reportTypeEnum.Name}) on ReportManager. " +
-                    $"Available methods: {string.Join(", ", rmType.GetMethods().Where(m => m.Name.Contains("Create")).Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
+                    $"Could not find CreateReportQuery({reportTypeEnum.Name}) on ReportManager.");
 
             var queryObj = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
             var queryType = queryObj.GetType();
 
+            // Set DownloadAllRelatedData = true (required by SDK to populate entity cache)
+            var downloadProp = queryType.GetProperty("DownloadAllRelatedData");
+            if (downloadProp != null)
+                downloadProp.SetValue(queryObj, true);
+
+            // Set paging
+            var pageSizeProp = queryType.GetProperty("PageSize");
+            if (pageSizeProp != null)
+                pageSizeProp.SetValue(queryObj, 1000);
+            var pageProp = queryType.GetProperty("Page");
+            if (pageProp != null)
+                pageProp.SetValue(queryObj, 1);
+
             // Filter to Unit entities via reflection (dynamic dispatch fails on SDK collection types)
             var filterProp = queryType.GetProperty("EntityTypeFilter")
                 ?? throw new InvalidOperationException(
-                    $"Could not find EntityTypeFilter on {queryType.Name}. " +
-                    $"Available properties: {string.Join(", ", queryType.GetProperties().Select(p => p.Name))}");
+                    $"Could not find EntityTypeFilter on {queryType.Name}.");
             var filterObj = filterProp.GetValue(queryObj)!;
             var addMethod = filterObj.GetType().GetMethods()
                 .FirstOrDefault(m => m.Name == "Add" && m.GetParameters().Length >= 1
                     && m.GetParameters()[0].ParameterType == entityTypeEnum)
                 ?? throw new InvalidOperationException(
-                    $"Could not find Add({entityTypeEnum.Name}) on {filterObj.GetType().Name}. " +
-                    $"Available methods: {string.Join(", ", filterObj.GetType().GetMethods().Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
-            // Call Add with EntityType + empty byte[] for the params argument
+                    $"Could not find Add({entityTypeEnum.Name}) on {filterObj.GetType().Name}.");
             addMethod.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
 
-            // Execute query via reflection
-            var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes)
-                ?? queryType.GetMethods().First(m => m.Name == "Query");
-            dynamic queryResult = queryMethod.Invoke(queryObj, null)!;
+            // Execute query via BeginQuery/EndQuery async pattern (SDK samples use this, not sync Query())
+            var beginMethod = queryType.GetMethod("BeginQuery")
+                ?? throw new InvalidOperationException($"Could not find BeginQuery on {queryType.Name}.");
+            var endMethod = queryType.GetMethod("EndQuery")
+                ?? throw new InvalidOperationException($"Could not find EndQuery on {queryType.Name}.");
+
+            var queryResult = await Task.Factory.FromAsync(
+                (callback, state) => (IAsyncResult)beginMethod.Invoke(queryObj, new object[] { callback!, state! })!,
+                ar => endMethod.Invoke(queryObj, new object[] { ar! }),
+                null);
+
+            // Access results via reflection (queryResult is a QueryCompletedEventArgs)
+            var dataProp = queryResult!.GetType().GetProperty("Data")
+                ?? throw new InvalidOperationException("Could not find Data property on query result.");
+            var dataTable = (System.Data.DataTable)dataProp.GetValue(queryResult)!;
 
             var cloudlinks = new List<CloudlinkInfo>();
-            foreach (System.Data.DataRow row in queryResult.Data.Rows)
+            foreach (System.Data.DataRow row in dataTable.Rows)
             {
                 Guid guid;
-                // Try common column names for the entity GUID
                 if (row.Table.Columns.Contains("Guid"))
                     guid = (Guid)row["Guid"];
                 else if (row.Table.Columns.Contains("EntityGuid"))
@@ -553,27 +572,34 @@ public class AccessControlService
 
                 var entityObj = (object)entity;
 
-                // Check if this is a CloudLink unit by examining the extension type
-                var extensionTypeProp = entityObj.GetType().GetProperty("AccessControlUnitExtensionType")
-                    ?? entityObj.GetType().GetProperty("ExtensionType");
+                // Check UnitExtensionType property (correct SDK property name per DAP samples)
+                var extensionTypeProp = entityObj.GetType().GetProperty("UnitExtensionType");
+                if (extensionTypeProp == null) continue;
 
-                if (extensionTypeProp != null)
+                string extType;
+                try
                 {
-                    var extType = extensionTypeProp.GetValue(entityObj)?.ToString() ?? "";
-                    if (extType.Contains("CloudLink", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var info = new CloudlinkInfo { Guid = guid.ToString() };
+                    extType = extensionTypeProp.GetValue(entityObj)?.ToString() ?? "";
+                }
+                catch
+                {
+                    // UnitExtensionType can throw SdkException with InvalidValue
+                    continue;
+                }
 
-                        var nameProp = entityObj.GetType().GetProperty("Name");
-                        if (nameProp != null)
-                            info.Name = nameProp.GetValue(entityObj)?.ToString() ?? "";
+                if (extType.Contains("CloudLink", StringComparison.OrdinalIgnoreCase))
+                {
+                    var info = new CloudlinkInfo { Guid = guid.ToString() };
 
-                        var isOnlineProp = entityObj.GetType().GetProperty("IsOnline");
-                        if (isOnlineProp != null)
-                            info.IsOnline = (bool)(isOnlineProp.GetValue(entityObj) ?? false);
+                    var nameProp = entityObj.GetType().GetProperty("Name");
+                    if (nameProp != null)
+                        info.Name = nameProp.GetValue(entityObj)?.ToString() ?? "";
 
-                        cloudlinks.Add(info);
-                    }
+                    var isOnlineProp = entityObj.GetType().GetProperty("IsOnline");
+                    if (isOnlineProp != null)
+                        info.IsOnline = (bool)(isOnlineProp.GetValue(entityObj) ?? false);
+
+                    cloudlinks.Add(info);
                 }
             }
 
@@ -590,7 +616,7 @@ public class AccessControlService
     /// <summary>
     /// Diagnostic: inspect EntityType enum values and query results for unit discovery.
     /// </summary>
-    public List<string> DiagnoseCloudlinkQuery()
+    public async Task<List<string>> DiagnoseCloudlinkQueryAsync()
     {
         if (!_engineService.IsConnected)
             throw new InvalidOperationException("Not connected to Security Center.");
@@ -628,7 +654,7 @@ public class AccessControlService
                 results.Add($"ReportType values matching Entity/Unit/Access: {string.Join(", ", relevant)}");
             }
 
-            // Try querying with EntityType.Unit
+            // Try querying with EntityType.Unit using BeginQuery/EndQuery
             if (entityTypeEnum != null && reportTypeEnum != null)
             {
                 var entityConfigValue = Enum.Parse(reportTypeEnum, "EntityConfiguration");
@@ -640,10 +666,31 @@ public class AccessControlService
 
                 if (createQueryMethod != null)
                 {
-                    // Try Unit first
                     var unitValue = Enum.Parse(entityTypeEnum, "Unit");
                     var queryObj = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
                     var queryType = queryObj.GetType();
+
+                    // Set DownloadAllRelatedData and paging
+                    var downloadProp = queryType.GetProperty("DownloadAllRelatedData");
+                    if (downloadProp != null)
+                    {
+                        downloadProp.SetValue(queryObj, true);
+                        results.Add("Set DownloadAllRelatedData = true");
+                    }
+                    else
+                    {
+                        results.Add("WARNING: DownloadAllRelatedData property not found");
+                    }
+                    var pageSizeProp = queryType.GetProperty("PageSize");
+                    if (pageSizeProp != null) pageSizeProp.SetValue(queryObj, 1000);
+                    var pageProp = queryType.GetProperty("Page");
+                    if (pageProp != null) pageProp.SetValue(queryObj, 1);
+
+                    // List query properties
+                    results.Add($"Query type: {queryType.FullName}");
+                    var queryProps = queryType.GetProperties().Select(p => p.Name).OrderBy(n => n).ToList();
+                    results.Add($"Query properties: {string.Join(", ", queryProps)}");
+
                     var filterProp = queryType.GetProperty("EntityTypeFilter");
                     var filterObj = filterProp!.GetValue(queryObj)!;
                     var addMethod = filterObj.GetType().GetMethods()
@@ -651,58 +698,86 @@ public class AccessControlService
                             && m.GetParameters()[0].ParameterType == entityTypeEnum);
                     addMethod!.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
 
-                    var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes)
-                        ?? queryType.GetMethods().First(m => m.Name == "Query");
-                    dynamic queryResult = queryMethod.Invoke(queryObj, null)!;
+                    // Use BeginQuery/EndQuery
+                    var beginMethod = queryType.GetMethod("BeginQuery");
+                    var endMethod = queryType.GetMethod("EndQuery");
 
-                    int rowCount = queryResult.Data.Rows.Count;
-                    results.Add($"EntityType.Unit query returned {rowCount} row(s)");
-
-                    // Show first 10 results with their types
-                    int shown = 0;
-                    foreach (System.Data.DataRow row in queryResult.Data.Rows)
+                    if (beginMethod != null && endMethod != null)
                     {
-                        if (shown >= 10) break;
-                        // List column names on first row
-                        if (shown == 0)
-                        {
-                            var colNames = new List<string>();
-                            foreach (System.Data.DataColumn col in row.Table.Columns)
-                                colNames.Add($"{col.ColumnName} ({col.DataType.Name})");
-                            results.Add($"Columns: {string.Join(", ", colNames)}");
-                        }
+                        results.Add("Using BeginQuery/EndQuery async pattern");
+                        var queryResult = await Task.Factory.FromAsync(
+                            (callback, state) => (IAsyncResult)beginMethod.Invoke(queryObj, new object[] { callback!, state! })!,
+                            ar => endMethod.Invoke(queryObj, new object[] { ar! }),
+                            null);
 
-                        Guid guid;
-                        if (row.Table.Columns.Contains("Guid"))
-                            guid = (Guid)row["Guid"];
-                        else if (row.Table.Columns.Contains("EntityGuid"))
-                            guid = (Guid)row["EntityGuid"];
-                        else
+                        var dataProp = queryResult!.GetType().GetProperty("Data");
+                        var dataTable = (System.Data.DataTable)dataProp!.GetValue(queryResult)!;
+
+                        int rowCount = dataTable.Rows.Count;
+                        results.Add($"EntityType.Unit query returned {rowCount} row(s)");
+
+                        int shown = 0;
+                        foreach (System.Data.DataRow row in dataTable.Rows)
                         {
-                            results.Add($"Row {shown}: no Guid/EntityGuid column found");
+                            if (shown >= 10) break;
+                            if (shown == 0)
+                            {
+                                var colNames = new List<string>();
+                                foreach (System.Data.DataColumn col in row.Table.Columns)
+                                    colNames.Add($"{col.ColumnName} ({col.DataType.Name})");
+                                results.Add($"Columns: {string.Join(", ", colNames)}");
+                            }
+
+                            Guid guid;
+                            if (row.Table.Columns.Contains("Guid"))
+                                guid = (Guid)row["Guid"];
+                            else if (row.Table.Columns.Contains("EntityGuid"))
+                                guid = (Guid)row["EntityGuid"];
+                            else
+                            {
+                                results.Add($"Row {shown}: no Guid/EntityGuid column found");
+                                shown++;
+                                continue;
+                            }
+
+                            dynamic entity = engine.GetEntity(guid);
+                            if (entity == null)
+                            {
+                                results.Add($"Row {shown}: {guid} -> entity is null");
+                                shown++;
+                                continue;
+                            }
+
+                            var entityObj = (object)entity;
+                            var typeName = entityObj.GetType().Name;
+                            var nameProp = entityObj.GetType().GetProperty("Name");
+                            var name = nameProp?.GetValue(entityObj)?.ToString() ?? "?";
+
+                            var extProp = entityObj.GetType().GetProperty("UnitExtensionType");
+                            string extVal;
+                            try
+                            {
+                                extVal = extProp?.GetValue(entityObj)?.ToString() ?? "N/A (prop not found)";
+                            }
+                            catch (Exception ex2)
+                            {
+                                extVal = $"ERROR: {ex2.InnerException?.Message ?? ex2.Message}";
+                            }
+
+                            results.Add($"Row {shown}: {guid} | Type={typeName} | Name={name} | UnitExtensionType={extVal}");
                             shown++;
-                            continue;
                         }
-
-                        dynamic entity = engine.GetEntity(guid);
-                        if (entity == null)
+                    }
+                    else
+                    {
+                        results.Add($"BeginQuery found: {beginMethod != null}, EndQuery found: {endMethod != null}");
+                        results.Add("Falling back to sync Query()");
+                        var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes);
+                        if (queryMethod != null)
                         {
-                            results.Add($"Row {shown}: {guid} -> entity is null");
-                            shown++;
-                            continue;
+                            dynamic queryResult = queryMethod.Invoke(queryObj, null)!;
+                            results.Add($"Sync query returned {queryResult.Data.Rows.Count} row(s)");
                         }
-
-                        var entityObj = (object)entity;
-                        var typeName = entityObj.GetType().Name;
-                        var nameProp = entityObj.GetType().GetProperty("Name");
-                        var name = nameProp?.GetValue(entityObj)?.ToString() ?? "?";
-
-                        var extProp = entityObj.GetType().GetProperty("AccessControlUnitExtensionType")
-                            ?? entityObj.GetType().GetProperty("ExtensionType");
-                        var extVal = extProp?.GetValue(entityObj)?.ToString() ?? "N/A";
-
-                        results.Add($"Row {shown}: {guid} | Type={typeName} | Name={name} | ExtensionType={extVal}");
-                        shown++;
                     }
                 }
             }

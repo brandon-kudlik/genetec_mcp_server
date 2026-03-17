@@ -7,11 +7,11 @@ public static class AccessControlEndpoints
 {
     public static void MapAccessControlEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/units/cloudlinks", (AccessControlService service) =>
+        app.MapGet("/api/units/cloudlinks", async (AccessControlService service) =>
         {
             try
             {
-                var result = service.QueryCloudlinks();
+                var result = await service.QueryCloudlinksAsync();
                 return Results.Ok(ApiResponse<QueryCloudlinksResponse>.Ok(result));
             }
             catch (InvalidOperationException ex)
@@ -139,11 +139,11 @@ public static class AccessControlEndpoints
             }
         });
 
-        app.MapGet("/api/debug/cloudlink-query", (AccessControlService service) =>
+        app.MapGet("/api/debug/cloudlink-query", async (AccessControlService service) =>
         {
             try
             {
-                var info = service.DiagnoseCloudlinkQuery();
+                var info = await service.DiagnoseCloudlinkQueryAsync();
                 return Results.Ok(ApiResponse<List<string>>.Ok(info));
             }
             catch (Exception ex)

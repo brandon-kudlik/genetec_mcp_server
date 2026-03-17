@@ -7,6 +7,24 @@ public static class AccessControlEndpoints
 {
     public static void MapAccessControlEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/units/cloudlinks", (AccessControlService service) =>
+        {
+            try
+            {
+                var result = service.QueryCloudlinks();
+                return Results.Ok(ApiResponse<QueryCloudlinksResponse>.Ok(result));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<QueryCloudlinksResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<QueryCloudlinksResponse>.Fail(msg));
+            }
+        });
+
         app.MapPost("/api/units/cloudlink", async (CloudlinkRequest request, AccessControlService service) =>
         {
             try

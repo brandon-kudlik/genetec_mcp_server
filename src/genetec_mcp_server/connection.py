@@ -405,6 +405,18 @@ class GenetecConnection:
 
         return self._post("/api/access-rules/batch", {"accessRules": access_rules})
 
+    def query_cloudlinks(self) -> list[dict[str, Any]]:
+        """Query all Cloudlink access control units in Security Center.
+
+        Returns:
+            List of Cloudlink dicts with guid, name, isOnline.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        data = self._get("/api/units/cloudlinks")
+        return data.get("cloudlinks", [])
+
     def add_event_to_action(self, mappings: list[dict[str, Any]]) -> dict[str, Any]:
         """Add event-to-action mappings to entities via the SDK service.
 

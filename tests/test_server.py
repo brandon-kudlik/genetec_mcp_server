@@ -740,6 +740,80 @@ class TestCreateAlarmTool:
         assert "SDK failure" in result
 
 
+class TestQueryCloudlinkTool:
+    """Tests for the query_cloudlink MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "query_cloudlink" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import query_cloudlink
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cloudlink(mock_ctx)
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_formatted_cloudlink_list(self):
+        from genetec_mcp_server.server import query_cloudlink
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cloudlinks.return_value = [
+            {"guid": "cl-guid-1", "name": "Cloudlink-01", "isOnline": True},
+            {"guid": "cl-guid-2", "name": "Cloudlink-02", "isOnline": False},
+        ]
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cloudlink(mock_ctx)
+        assert "cl-guid-1" in result
+        assert "Cloudlink-01" in result
+        assert "cl-guid-2" in result
+        assert "Online" in result
+        assert "Offline" in result
+        mock_conn.query_cloudlinks.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_no_cloudlinks_message(self):
+        from genetec_mcp_server.server import query_cloudlink
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cloudlinks.return_value = []
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cloudlink(mock_ctx)
+        assert "no cloudlink" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import query_cloudlink
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cloudlinks.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cloudlink(mock_ctx)
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestAddEventToActionTool:
     """Tests for the add_event_to_action MCP tool."""
 

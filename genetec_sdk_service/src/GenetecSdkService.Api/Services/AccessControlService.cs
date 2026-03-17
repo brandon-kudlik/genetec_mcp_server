@@ -485,6 +485,93 @@ public class AccessControlService
         }
     }
 
+    public QueryCloudlinksResponse QueryCloudlinks()
+    {
+        if (!_engineService.IsConnected)
+            throw new InvalidOperationException("Not connected to Security Center.");
+
+        try
+        {
+            var engine = _engineService.Engine;
+
+            // Resolve SDK enum types via reflection
+            var reportTypeEnum = FindTypeByName("ReportType")
+                ?? throw new InvalidOperationException("Could not find ReportType enum in loaded assemblies.");
+            var entityTypeEnum = FindTypeByName("EntityType")
+                ?? throw new InvalidOperationException("Could not find EntityType enum in loaded assemblies.");
+
+            var entityConfigValue = Enum.Parse(reportTypeEnum, "EntityConfiguration");
+            var unitValue = Enum.Parse(entityTypeEnum, "Unit");
+
+            // Create query via reflection on ReportManager
+            var reportManager = (object)engine.ReportManager;
+            var rmType = reportManager.GetType();
+            var createQueryMethod = rmType.GetMethods()
+                .FirstOrDefault(m => m.Name == "CreateReportQuery" && m.GetParameters().Length == 1
+                    && m.GetParameters()[0].ParameterType == reportTypeEnum)
+                ?? throw new InvalidOperationException(
+                    $"Could not find CreateReportQuery({reportTypeEnum.Name}) on ReportManager. " +
+                    $"Available methods: {string.Join(", ", rmType.GetMethods().Where(m => m.Name.Contains("Create")).Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
+
+            dynamic query = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
+
+            // Filter to Unit entities
+            query.EntityTypeFilter.Add(unitValue);
+
+            // Execute query
+            var queryResult = query.Query();
+
+            var cloudlinks = new List<CloudlinkInfo>();
+            foreach (System.Data.DataRow row in queryResult.Data.Rows)
+            {
+                Guid guid;
+                // Try common column names for the entity GUID
+                if (row.Table.Columns.Contains("Guid"))
+                    guid = (Guid)row["Guid"];
+                else if (row.Table.Columns.Contains("EntityGuid"))
+                    guid = (Guid)row["EntityGuid"];
+                else
+                    continue;
+
+                dynamic entity = engine.GetEntity(guid);
+                if (entity == null) continue;
+
+                var entityObj = (object)entity;
+
+                // Check if this is a CloudLink unit by examining the extension type
+                var extensionTypeProp = entityObj.GetType().GetProperty("AccessControlUnitExtensionType")
+                    ?? entityObj.GetType().GetProperty("ExtensionType");
+
+                if (extensionTypeProp != null)
+                {
+                    var extType = extensionTypeProp.GetValue(entityObj)?.ToString() ?? "";
+                    if (extType.Contains("CloudLink", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var info = new CloudlinkInfo { Guid = guid.ToString() };
+
+                        var nameProp = entityObj.GetType().GetProperty("Name");
+                        if (nameProp != null)
+                            info.Name = nameProp.GetValue(entityObj)?.ToString() ?? "";
+
+                        var isOnlineProp = entityObj.GetType().GetProperty("IsOnline");
+                        if (isOnlineProp != null)
+                            info.IsOnline = (bool)(isOnlineProp.GetValue(entityObj) ?? false);
+
+                        cloudlinks.Add(info);
+                    }
+                }
+            }
+
+            return new QueryCloudlinksResponse { Cloudlinks = cloudlinks };
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException != null)
+        {
+            throw new InvalidOperationException(
+                $"SDK error in QueryCloudlinks: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}",
+                ex.InnerException);
+        }
+    }
+
     /// <summary>
     /// Diagnostic: inspect builder methods for a given unit GUID.
     /// </summary>

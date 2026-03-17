@@ -429,6 +429,32 @@ async def create_access_rules(
 
 
 @mcp.tool()
+async def query_cloudlink(ctx: Context) -> str:
+    """Query all Cloudlink access control units enrolled in Security Center.
+
+    Returns a list of Cloudlink units with their GUIDs, names, and online status.
+    Use the returned GUIDs with other tools that require a Cloudlink unit GUID
+    (e.g. add_mercury_controller, add_interface_module).
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        cloudlinks = connection.query_cloudlinks()
+        if not cloudlinks:
+            return "No Cloudlink units found in Security Center."
+        lines = [f"Found {len(cloudlinks)} Cloudlink unit(s):\n"]
+        for cl in cloudlinks:
+            status = "Online" if cl.get("isOnline") else "Offline"
+            lines.append(
+                f"- {cl.get('name', 'Unnamed')} | GUID: {cl.get('guid', '')} | {status}"
+            )
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def add_event_to_action(
     ctx: Context,
     mappings: list[dict[str, Any]],

@@ -640,6 +640,55 @@ class TestCreateAlarm:
         conn.dispose()
 
 
+class TestQueryCloudlinks:
+    """Tests for querying Cloudlink units."""
+
+    def test_returns_cloudlinks_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cloudlinks": [
+                    {"guid": "cl-guid-1", "name": "Cloudlink-01", "isOnline": True},
+                    {"guid": "cl-guid-2", "name": "Cloudlink-02", "isOnline": False},
+                ]}}
+            )
+            result = conn.query_cloudlinks()
+        assert len(result) == 2
+        assert result[0]["guid"] == "cl-guid-1"
+        assert result[1]["name"] == "Cloudlink-02"
+        conn.dispose()
+
+    def test_returns_empty_list_when_none_found(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cloudlinks": []}}
+            )
+            result = conn.query_cloudlinks()
+        assert result == []
+        conn.dispose()
+
+    def test_calls_correct_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cloudlinks": []}}
+            )
+            conn.query_cloudlinks()
+            mock_get.assert_called_once_with("/api/units/cloudlinks")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.query_cloudlinks()
+        conn.dispose()
+
+
 class TestAddEventToAction:
     """Tests for adding event-to-action mappings."""
 

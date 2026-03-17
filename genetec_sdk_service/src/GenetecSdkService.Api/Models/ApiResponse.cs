@@ -113,6 +113,20 @@ public class ConfigureIoDevicesResponse
     public int ConfiguredCount { get; set; }
 }
 
+// Cloudlink query models
+
+public class CloudlinkInfo
+{
+    public string Guid { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool IsOnline { get; set; }
+}
+
+public class QueryCloudlinksResponse
+{
+    public List<CloudlinkInfo> Cloudlinks { get; set; } = new();
+}
+
 // Door creation models
 
 public class CreateDoorItem

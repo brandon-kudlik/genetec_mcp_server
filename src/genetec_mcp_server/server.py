@@ -147,7 +147,8 @@ async def add_mercury_controller(
             LP4502, MP1501, MP1501WithExpansion, MP1502, MP2500, MP4502, M5IC, MSICS.
         ip_address: IP address of the Mercury controller.
         port: TCP port (default 3001).
-        channel: Channel number (default 0).
+        channel: Channel ID for this Mercury controller. Must be unique among
+            controllers on the same Cloudlink unit (0, 1, 2, ...). Default 0.
 
     Returns:
         A success message or an error description.

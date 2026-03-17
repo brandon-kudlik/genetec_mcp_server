@@ -594,7 +594,20 @@ public class AccessControlService
                     continue;
                 }
 
-                if (extType.Contains("CloudLink", StringComparison.OrdinalIgnoreCase))
+                // Cloudlink units report UnitExtensionType = "SMC" (Synergis Master Controller).
+                // Also match "CloudLink" or "Generic" only if the unit belongs to an AccessManager role.
+                var isCloudlink = extType.Equals("SMC", StringComparison.OrdinalIgnoreCase)
+                    || extType.Contains("CloudLink", StringComparison.OrdinalIgnoreCase);
+
+                if (!isCloudlink && extType.Equals("Generic", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Generic units belong to Cloudlink only if owned by AccessManager
+                    var ownerRoleProp = entityObj.GetType().GetProperty("OwnerRoleType");
+                    var ownerRole = ownerRoleProp?.GetValue(entityObj)?.ToString() ?? "";
+                    isCloudlink = ownerRole.Equals("AccessManager", StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (isCloudlink)
                 {
                     var info = new CloudlinkInfo { Guid = guid.ToString() };
 

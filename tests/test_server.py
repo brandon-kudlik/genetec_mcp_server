@@ -245,15 +245,13 @@ class TestAddMercuryControllerTool:
         assert "not connected" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_returns_result_on_success(self):
-        """Tool should return success message on successful enrollment."""
+    async def test_returns_guid_on_success(self):
+        """Tool should return the new controller's GUID on success."""
         from genetec_mcp_server.server import add_mercury_controller
 
         mock_conn = MagicMock()
         mock_conn.is_connected = True
-        mock_conn.add_mercury_controller.return_value = (
-            "Mercury LP1502 'Mercury-01' added at 192.168.1.50 to unit 00000000-0000-0000-0000-000000000001"
-        )
+        mock_conn.add_mercury_controller.return_value = "11111111-1111-1111-1111-111111111111"
 
         mock_ctx = MagicMock()
         mock_ctx.request_context.lifespan_context.connection = mock_conn
@@ -265,7 +263,8 @@ class TestAddMercuryControllerTool:
             controller_type="LP1502",
             ip_address="192.168.1.50",
         )
-        assert "mercury" in result.lower()
+        assert "11111111-1111-1111-1111-111111111111" in result
+        assert "GUID:" in result
         mock_conn.add_mercury_controller.assert_called_once_with(
             unit_guid="00000000-0000-0000-0000-000000000001",
             name="Mercury-01",
@@ -329,15 +328,13 @@ class TestAddInterfaceModuleTool:
         assert "not connected" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_returns_result_on_success(self):
-        """Tool should return success message on successful addition."""
+    async def test_returns_guid_on_success(self):
+        """Tool should return the new interface module's GUID on success."""
         from genetec_mcp_server.server import add_interface_module
 
         mock_conn = MagicMock()
         mock_conn.is_connected = True
-        mock_conn.add_interface_module.return_value = (
-            "MR50 'Board-01' added to controller 00000000-0000-0000-0000-000000000002"
-        )
+        mock_conn.add_interface_module.return_value = "22222222-2222-2222-2222-222222222222"
 
         mock_ctx = MagicMock()
         mock_ctx.request_context.lifespan_context.connection = mock_conn
@@ -349,7 +346,8 @@ class TestAddInterfaceModuleTool:
             name="Board-01",
             board_type="MR50",
         )
-        assert "Board-01" in result
+        assert "22222222-2222-2222-2222-222222222222" in result
+        assert "GUID:" in result
         mock_conn.add_interface_module.assert_called_once_with(
             unit_guid="00000000-0000-0000-0000-000000000001",
             controller_guid="00000000-0000-0000-0000-000000000002",

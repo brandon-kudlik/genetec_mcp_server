@@ -197,11 +197,11 @@ class TestAddCloudlinkUnit:
 class TestAddMercuryController:
     """Tests for adding Mercury sub-controllers."""
 
-    def test_returns_message_on_success(self):
+    def test_returns_guid_on_success(self):
         conn = GenetecConnection(base_url="http://localhost:5100")
         with patch.object(conn._client, "post") as mock_post:
             mock_post.return_value = _mock_response(
-                {"success": True, "data": {"message": "Mercury LP1502 'Mercury-01' added"}}
+                {"success": True, "data": {"guid": "11111111-1111-1111-1111-111111111111", "message": "Mercury LP1502 'Mercury-01' added"}}
             )
             result = conn.add_mercury_controller(
                 unit_guid="00000000-0000-0000-0000-000000000001",
@@ -209,7 +209,7 @@ class TestAddMercuryController:
                 controller_type="LP1502",
                 ip_address="192.168.1.50",
             )
-        assert "Mercury" in result
+        assert result == "11111111-1111-1111-1111-111111111111"
         conn.dispose()
 
     def test_requires_unit_guid(self):
@@ -260,11 +260,11 @@ class TestAddMercuryController:
 class TestAddInterfaceModule:
     """Tests for adding interface modules to Mercury controllers."""
 
-    def test_returns_message_on_success(self):
+    def test_returns_guid_on_success(self):
         conn = GenetecConnection(base_url="http://localhost:5100")
         with patch.object(conn._client, "post") as mock_post:
             mock_post.return_value = _mock_response(
-                {"success": True, "data": {"message": "MR50 'Board-01' added to controller"}}
+                {"success": True, "data": {"guid": "22222222-2222-2222-2222-222222222222", "message": "MR50 'Board-01' added to controller"}}
             )
             result = conn.add_interface_module(
                 unit_guid="00000000-0000-0000-0000-000000000001",
@@ -272,7 +272,7 @@ class TestAddInterfaceModule:
                 name="Board-01",
                 board_type="MR50",
             )
-        assert "Board-01" in result
+        assert result == "22222222-2222-2222-2222-222222222222"
         conn.dispose()
 
     def test_requires_unit_guid(self):

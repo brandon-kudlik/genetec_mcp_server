@@ -62,6 +62,7 @@ public class MercuryControllerRequest
 
 public class MercuryControllerResponse
 {
+    public string Guid { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
 }
 
@@ -74,6 +75,7 @@ public class InterfaceModuleRequest
 
 public class InterfaceModuleResponse
 {
+    public string Guid { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
 }
 

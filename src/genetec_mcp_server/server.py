@@ -151,13 +151,14 @@ async def add_mercury_controller(
             controllers on the same Cloudlink unit (0, 1, 2, ...). Default 0.
 
     Returns:
-        A success message or an error description.
+        The GUID of the newly created Mercury controller, or an error message.
+        Use this GUID as controller_guid when calling add_interface_module.
     """
     connection: GenetecConnection = ctx.request_context.lifespan_context.connection
     if not connection.is_connected:
         return "Error: Not connected to Security Center."
     try:
-        result = connection.add_mercury_controller(
+        guid = connection.add_mercury_controller(
             unit_guid=unit_guid,
             name=name,
             controller_type=controller_type,
@@ -165,7 +166,7 @@ async def add_mercury_controller(
             port=port,
             channel=channel,
         )
-        return f"Mercury controller enrolled successfully: {result}"
+        return f"Mercury {controller_type} controller '{name}' created (GUID: {guid})"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
 
@@ -194,20 +195,21 @@ async def add_interface_module(
         address: SIO bus address (default 0).
 
     Returns:
-        A success message or an error description.
+        The GUID of the newly created interface module, or an error message.
+        Use this GUID with list_io_devices and configure_io_devices.
     """
     connection: GenetecConnection = ctx.request_context.lifespan_context.connection
     if not connection.is_connected:
         return "Error: Not connected to Security Center."
     try:
-        result = connection.add_interface_module(
+        guid = connection.add_interface_module(
             unit_guid=unit_guid,
             controller_guid=controller_guid,
             name=name,
             board_type=board_type,
             address=address,
         )
-        return f"Interface module added successfully: {result}"
+        return f"Interface module '{name}' ({board_type}) created (GUID: {guid})"
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
 

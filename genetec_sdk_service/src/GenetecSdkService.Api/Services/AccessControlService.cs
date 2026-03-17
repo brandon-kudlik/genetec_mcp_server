@@ -147,14 +147,18 @@ public class AccessControlService
             ?? throw new InvalidOperationException(
                 $"Could not find AddAccessControlBusInterface on {builderType.Name}. " +
                 $"Available methods: {string.Join(", ", builderType.GetMethods().Select(m => m.Name).Distinct())}");
-        addMethod.Invoke(builderObj, new object[] { request.Name, (object)mercuryInterface });
+        var addResult = addMethod.Invoke(builderObj, new object[] { request.Name, (object)mercuryInterface });
 
         var buildMethod = builderType.GetMethod("Build")
             ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
-        buildMethod.Invoke(builderObj, null);
+        var buildResult = buildMethod.Invoke(builderObj, null);
+
+        // Try to extract the new entity GUID from Build() or AddAccessControlBusInterface() return values
+        var newGuid = ExtractGuid(buildResult) ?? ExtractGuid(addResult) ?? string.Empty;
 
         return new MercuryControllerResponse
         {
+            Guid = newGuid,
             Message = $"Mercury {request.ControllerType} '{request.Name}' added at {request.IpAddress} to unit {unitGuid}"
         };
     }
@@ -218,14 +222,18 @@ public class AccessControlService
             var addChildMethod = builderType.GetMethod("AddAccessControlChildInterface")
                 ?? throw new InvalidOperationException(
                     $"Could not find AddAccessControlChildInterface on {builderType.Name}.");
-            addChildMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface, parentControllerGuid });
+            var addResult = addChildMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface, parentControllerGuid });
 
             var buildMethod = builderType.GetMethod("Build")
                 ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
-            buildMethod.Invoke(builderObj, null);
+            var buildResult = buildMethod.Invoke(builderObj, null);
+
+            // Try to extract the new entity GUID from Build() or AddAccessControlChildInterface() return values
+            var newGuid = ExtractGuid(buildResult) ?? ExtractGuid(addResult) ?? string.Empty;
 
             return new InterfaceModuleResponse
             {
+                Guid = newGuid,
                 Message = $"{request.BoardType} '{request.Name}' added to controller {controllerGuid}"
             };
         }
@@ -956,6 +964,70 @@ public class AccessControlService
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Extract a GUID from a return value. Handles Guid, IEnumerable&lt;Guid&gt;, and string representations.
+    /// </summary>
+    private static string? ExtractGuid(object? result)
+    {
+        if (result == null) return null;
+
+        if (result is Guid g && g != Guid.Empty)
+            return g.ToString();
+
+        if (result is IEnumerable<Guid> guids)
+        {
+            var first = guids.FirstOrDefault();
+            if (first != Guid.Empty)
+                return first.ToString();
+        }
+
+        // Some SDK methods return the GUID as a string
+        var str = result.ToString();
+        if (str != null && Guid.TryParse(str, out var parsed) && parsed != Guid.Empty)
+            return parsed.ToString();
+
+        return null;
+    }
+
+    /// <summary>
+    /// Diagnostic: inspect Build() and Add method return types without calling them.
+    /// </summary>
+    public object GetBuildReturnInfo(string unitGuid)
+    {
+        if (string.IsNullOrWhiteSpace(unitGuid))
+            throw new ArgumentException("unitGuid is required.");
+        if (!_engineService.IsConnected)
+            throw new InvalidOperationException("Not connected to Security Center.");
+
+        var engine = _engineService.Engine;
+        var parentGuid = Guid.Parse(unitGuid);
+
+        var entityManager = engine.EntityManager;
+        var emType = ((object)entityManager).GetType();
+        var getBuilderMethod = emType.GetMethod("GetAccessControlInterfacePeripheralsBuilder")
+            ?? throw new InvalidOperationException("Could not find GetAccessControlInterfacePeripheralsBuilder.");
+
+        var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
+            ?? throw new InvalidOperationException("Builder returned null.");
+
+        var builderType = builderObj.GetType();
+        var methods = builderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.Name is "Build" or "AddAccessControlBusInterface" or "AddAccessControlChildInterface")
+            .Select(m => new
+            {
+                m.Name,
+                ReturnType = m.ReturnType.FullName,
+                Parameters = m.GetParameters().Select(p => new { p.Name, Type = p.ParameterType.FullName }).ToList()
+            })
+            .ToList();
+
+        return new
+        {
+            BuilderType = builderType.FullName,
+            Methods = methods
+        };
     }
 
     private static Type? FindTypeByName(string typeName)

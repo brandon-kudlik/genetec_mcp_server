@@ -180,7 +180,7 @@ class GenetecConnection:
             channel: Channel number (default 0).
 
         Returns:
-            A result string describing the outcome.
+            The GUID string of the newly created Mercury controller.
 
         Raises:
             ValueError: If any required parameter is empty or type is invalid.
@@ -207,7 +207,7 @@ class GenetecConnection:
             "port": port,
             "channel": channel,
         })
-        return data["message"]
+        return data["guid"]
 
     def add_interface_module(
         self,
@@ -227,7 +227,7 @@ class GenetecConnection:
             address: SIO bus address (default 0).
 
         Returns:
-            A result string describing the outcome.
+            The GUID string of the newly created interface module.
 
         Raises:
             ValueError: If any required parameter is empty or type is invalid.
@@ -252,7 +252,7 @@ class GenetecConnection:
             "boardType": board_type,
             "address": address,
         })
-        return data["message"]
+        return data["guid"]
 
     def list_io_devices(self, interface_module_guid: str) -> list[dict[str, Any]]:
         """List IO devices on an interface module.

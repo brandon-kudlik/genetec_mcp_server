@@ -216,5 +216,18 @@ public static class AccessControlEndpoints
                 return Results.Ok(ApiResponse<List<string>>.Fail(ex.InnerException?.Message ?? ex.Message));
             }
         });
+
+        app.MapGet("/api/debug/build-return-info/{unitGuid}", (string unitGuid, AccessControlService service) =>
+        {
+            try
+            {
+                var info = service.GetBuildReturnInfo(unitGuid);
+                return Results.Ok(new { success = true, data = info });
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { success = false, error = ex.InnerException?.Message ?? ex.Message });
+            }
+        });
     }
 }

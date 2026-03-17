@@ -140,6 +140,9 @@ public class AccessControlService
         var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentGuid })
             ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
 
+        // Snapshot child interface modules BEFORE build
+        var beforeGuids = GetUnitInterfaceModuleGuids(engine, parentGuid);
+
         // All SDK builder calls must use reflection (dynamic dispatch fails on SDK types)
         var builderType = builderObj.GetType();
 
@@ -147,14 +150,17 @@ public class AccessControlService
             ?? throw new InvalidOperationException(
                 $"Could not find AddAccessControlBusInterface on {builderType.Name}. " +
                 $"Available methods: {string.Join(", ", builderType.GetMethods().Select(m => m.Name).Distinct())}");
-        var addResult = addMethod.Invoke(builderObj, new object[] { request.Name, (object)mercuryInterface });
+        addMethod.Invoke(builderObj, new object[] { request.Name, (object)mercuryInterface });
 
         var buildMethod = builderType.GetMethod("Build")
             ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
-        var buildResult = buildMethod.Invoke(builderObj, null);
+        buildMethod.Invoke(builderObj, null);
 
-        // Try to extract the new entity GUID from Build() or AddAccessControlBusInterface() return values
-        var newGuid = ExtractGuid(buildResult) ?? ExtractGuid(addResult) ?? string.Empty;
+        // Snapshot AFTER build and diff to find the new entity GUID
+        var afterGuids = GetUnitInterfaceModuleGuids(engine, parentGuid);
+        var newGuids = afterGuids.Except(beforeGuids).ToList();
+        var newGuid = newGuids.FirstOrDefault().ToString();
+        if (newGuid == Guid.Empty.ToString()) newGuid = string.Empty;
 
         return new MercuryControllerResponse
         {
@@ -215,6 +221,9 @@ public class AccessControlService
             var builderObj = getBuilderMethod.Invoke(entityManager, new object[] { parentUnitGuid })
                 ?? throw new InvalidOperationException("GetAccessControlInterfacePeripheralsBuilder returned null.");
 
+            // Snapshot child interface modules of the Mercury controller BEFORE build
+            var beforeGuids = GetChildInterfaceModuleGuids(engine, parentControllerGuid);
+
             // Use AddAccessControlChildInterface(name, interface, parentGuid) to add
             // the board under the Mercury controller, not directly under the unit
             var builderType = builderObj.GetType();
@@ -222,14 +231,17 @@ public class AccessControlService
             var addChildMethod = builderType.GetMethod("AddAccessControlChildInterface")
                 ?? throw new InvalidOperationException(
                     $"Could not find AddAccessControlChildInterface on {builderType.Name}.");
-            var addResult = addChildMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface, parentControllerGuid });
+            addChildMethod.Invoke(builderObj, new object[] { request.Name, (object)boardInterface, parentControllerGuid });
 
             var buildMethod = builderType.GetMethod("Build")
                 ?? throw new InvalidOperationException($"Could not find Build on {builderType.Name}.");
-            var buildResult = buildMethod.Invoke(builderObj, null);
+            buildMethod.Invoke(builderObj, null);
 
-            // Try to extract the new entity GUID from Build() or AddAccessControlChildInterface() return values
-            var newGuid = ExtractGuid(buildResult) ?? ExtractGuid(addResult) ?? string.Empty;
+            // Snapshot AFTER build and diff to find the new entity GUID
+            var afterGuids = GetChildInterfaceModuleGuids(engine, parentControllerGuid);
+            var newGuids = afterGuids.Except(beforeGuids).ToList();
+            var newGuid = newGuids.FirstOrDefault().ToString();
+            if (newGuid == Guid.Empty.ToString()) newGuid = string.Empty;
 
             return new InterfaceModuleResponse
             {
@@ -967,32 +979,51 @@ public class AccessControlService
     }
 
     /// <summary>
-    /// Extract a GUID from a return value. Handles Guid, IEnumerable&lt;Guid&gt;, and string representations.
+    /// Get GUIDs of a Unit's direct child interface modules (e.g. Mercury controllers under a Cloudlink).
+    /// Uses dynamic dispatch on Unit.InterfaceModules property.
     /// </summary>
-    private static string? ExtractGuid(object? result)
+    private static HashSet<Guid> GetUnitInterfaceModuleGuids(dynamic engine, Guid unitGuid)
     {
-        if (result == null) return null;
+        dynamic entity = engine.GetEntity(unitGuid);
+        if (entity == null) return new HashSet<Guid>();
 
-        if (result is Guid g && g != Guid.Empty)
-            return g.ToString();
+        var entityObj = (object)entity;
+        var prop = entityObj.GetType().GetProperty("InterfaceModules");
+        if (prop == null) return new HashSet<Guid>();
 
-        if (result is IEnumerable<Guid> guids)
-        {
-            var first = guids.FirstOrDefault();
-            if (first != Guid.Empty)
-                return first.ToString();
-        }
+        var collection = prop.GetValue(entityObj);
+        if (collection == null) return new HashSet<Guid>();
 
-        // Some SDK methods return the GUID as a string
-        var str = result.ToString();
-        if (str != null && Guid.TryParse(str, out var parsed) && parsed != Guid.Empty)
-            return parsed.ToString();
-
-        return null;
+        var guids = new HashSet<Guid>();
+        foreach (var item in (System.Collections.IEnumerable)collection)
+            guids.Add((Guid)item);
+        return guids;
     }
 
     /// <summary>
-    /// Diagnostic: inspect Build() and Add method return types without calling them.
+    /// Get GUIDs of an InterfaceModule's child interface modules (e.g. MR52 boards under a Mercury controller).
+    /// Uses reflection on InterfaceModule.ChildrenInterfaceModule property.
+    /// </summary>
+    private static HashSet<Guid> GetChildInterfaceModuleGuids(dynamic engine, Guid interfaceModuleGuid)
+    {
+        dynamic entity = engine.GetEntity(interfaceModuleGuid);
+        if (entity == null) return new HashSet<Guid>();
+
+        var entityObj = (object)entity;
+        var prop = entityObj.GetType().GetProperty("ChildrenInterfaceModule");
+        if (prop == null) return new HashSet<Guid>();
+
+        var collection = prop.GetValue(entityObj);
+        if (collection == null) return new HashSet<Guid>();
+
+        var guids = new HashSet<Guid>();
+        foreach (var item in (System.Collections.IEnumerable)collection)
+            guids.Add((Guid)item);
+        return guids;
+    }
+
+    /// <summary>
+    /// Diagnostic: inspect Build() and Add method return types without calling them (non-destructive).
     /// </summary>
     public object GetBuildReturnInfo(string unitGuid)
     {

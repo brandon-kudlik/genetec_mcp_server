@@ -48,7 +48,8 @@ public static class SystemEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<VersionData>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<VersionData>.Fail(msg));
             }
         });
     }

@@ -40,7 +40,8 @@ public static class EventToActionEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<object>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<object>.Fail(msg));
             }
         });
     }

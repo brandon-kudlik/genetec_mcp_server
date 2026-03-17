@@ -24,7 +24,8 @@ public static class CardholderEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<CardholderResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<CardholderResponse>.Fail(msg));
             }
         });
     }

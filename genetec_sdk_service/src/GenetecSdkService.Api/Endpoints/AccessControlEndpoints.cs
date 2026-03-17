@@ -28,7 +28,8 @@ public static class AccessControlEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<CloudlinkResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<CloudlinkResponse>.Fail(msg));
             }
         });
 
@@ -49,7 +50,8 @@ public static class AccessControlEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<MercuryControllerResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<MercuryControllerResponse>.Fail(msg));
             }
         });
 
@@ -70,7 +72,8 @@ public static class AccessControlEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<InterfaceModuleResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<InterfaceModuleResponse>.Fail(msg));
             }
         });
 
@@ -91,7 +94,8 @@ public static class AccessControlEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<ListIoDevicesResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<ListIoDevicesResponse>.Fail(msg));
             }
         });
 
@@ -112,8 +116,48 @@ public static class AccessControlEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<ConfigureIoDevicesResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<ConfigureIoDevicesResponse>.Fail(msg));
             }
+        });
+
+        app.MapGet("/api/debug/mercury-test/{unitGuid}", (string unitGuid, AccessControlService service) =>
+        {
+            var diagnostics = new List<string>();
+            try
+            {
+                diagnostics.Add($"Testing mercury addition on unit: {unitGuid}");
+
+                var request = new MercuryControllerRequest
+                {
+                    Name = "DiagTest Controller",
+                    ControllerType = "LP1502",
+                    IpAddress = "192.168.1.250",
+                    Port = 3001,
+                    Channel = 0
+                };
+
+                var result = service.AddMercuryController(unitGuid, request);
+                diagnostics.Add($"SUCCESS: {result.Message}");
+            }
+            catch (Exception ex)
+            {
+                diagnostics.Add($"Exception type: {ex.GetType().FullName}");
+                diagnostics.Add($"Message: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    diagnostics.Add($"Inner type: {ex.InnerException.GetType().FullName}");
+                    diagnostics.Add($"Inner message: {ex.InnerException.Message}");
+                    diagnostics.Add($"Inner stack: {ex.InnerException.StackTrace}");
+                    if (ex.InnerException.InnerException != null)
+                    {
+                        diagnostics.Add($"Inner inner type: {ex.InnerException.InnerException.GetType().FullName}");
+                        diagnostics.Add($"Inner inner message: {ex.InnerException.InnerException.Message}");
+                    }
+                }
+                diagnostics.Add($"Stack: {ex.StackTrace}");
+            }
+            return Results.Ok(ApiResponse<List<string>>.Ok(diagnostics));
         });
 
         app.MapGet("/api/debug/builder-methods/{unitGuid}", (string unitGuid, AccessControlService service) =>

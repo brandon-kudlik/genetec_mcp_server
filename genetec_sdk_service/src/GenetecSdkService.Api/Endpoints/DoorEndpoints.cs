@@ -24,7 +24,8 @@ public static class DoorEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Ok(ApiResponse<BatchCreateDoorsResponse>.Fail(ex.Message));
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<BatchCreateDoorsResponse>.Fail(msg));
             }
         });
 

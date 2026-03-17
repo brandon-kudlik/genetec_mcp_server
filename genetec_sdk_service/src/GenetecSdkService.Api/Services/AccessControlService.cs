@@ -705,8 +705,12 @@ public class AccessControlService
                             && m.GetParameters()[0].ParameterType == entityTypeEnum);
                     addMethod!.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
 
-                    // Use BeginQuery/EndQuery
-                    var beginMethod = queryType.GetMethod("BeginQuery");
+                    // Use BeginQuery/EndQuery — select the 2-param overload
+                    var beginMethod = queryType.GetMethods()
+                        .FirstOrDefault(m => m.Name == "BeginQuery"
+                            && m.GetParameters().Length == 2
+                            && m.GetParameters()[0].ParameterType == typeof(AsyncCallback)
+                            && m.GetParameters()[1].ParameterType == typeof(object));
                     var endMethod = queryType.GetMethod("EndQuery");
 
                     if (beginMethod != null && endMethod != null)

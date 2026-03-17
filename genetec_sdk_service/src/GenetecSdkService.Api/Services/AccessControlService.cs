@@ -541,8 +541,15 @@ public class AccessControlService
             addMethod.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
 
             // Execute query via BeginQuery/EndQuery async pattern (SDK samples use this, not sync Query())
-            var beginMethod = queryType.GetMethod("BeginQuery")
-                ?? throw new InvalidOperationException($"Could not find BeginQuery on {queryType.Name}.");
+            // Select the overload that takes (AsyncCallback, object) — there are multiple BeginQuery overloads
+            var beginMethod = queryType.GetMethods()
+                .FirstOrDefault(m => m.Name == "BeginQuery"
+                    && m.GetParameters().Length == 2
+                    && m.GetParameters()[0].ParameterType == typeof(AsyncCallback)
+                    && m.GetParameters()[1].ParameterType == typeof(object))
+                ?? throw new InvalidOperationException(
+                    $"Could not find BeginQuery(AsyncCallback, object) on {queryType.Name}. " +
+                    $"Available: {string.Join(", ", queryType.GetMethods().Where(m => m.Name == "BeginQuery").Select(m => $"BeginQuery({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
             var endMethod = queryType.GetMethod("EndQuery")
                 ?? throw new InvalidOperationException($"Could not find EndQuery on {queryType.Name}.");
 

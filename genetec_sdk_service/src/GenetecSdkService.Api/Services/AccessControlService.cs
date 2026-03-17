@@ -748,39 +748,59 @@ public class AccessControlService
                     results.Add($"Columns: {string.Join(", ", colNames)}");
                 }
 
-                // Now try GetEntities again after query has populated cache
-                results.Add("=== After query, re-check GetEntities(Unit) ===");
-                var engineObj = (object)engine;
-                var getEntitiesMethod = engineObj.GetType().GetMethods()
-                    .FirstOrDefault(m => m.Name == "GetEntities" && m.GetParameters().Length == 1
-                        && m.GetParameters()[0].ParameterType == entityTypeEnum);
-                if (getEntitiesMethod != null)
+                // Show each row from the query and try GetEntity on each
+                int shown = 0;
+                foreach (System.Data.DataRow row in dataTable.Rows)
                 {
-                    var entityGuids = getEntitiesMethod.Invoke(engineObj, new[] { unitValue });
-                    int count = 0;
-                    if (entityGuids is System.Collections.IEnumerable enumerable2)
+                    if (shown >= 10) break;
+                    try
                     {
-                        foreach (var guidObj in enumerable2)
+                        var guid = (Guid)row["Guid"];
+                        results.Add($"Row {shown}: Guid={guid}");
+
+                        dynamic entity = engine.GetEntity(guid);
+                        if (entity == null)
                         {
-                            count++;
-                            if (count <= 10)
+                            results.Add($"  GetEntity returned null");
+                            shown++;
+                            continue;
+                        }
+
+                        var entObj = (object)entity;
+                        var typeName = entObj.GetType().Name;
+                        var name = entObj.GetType().GetProperty("Name")?.GetValue(entObj)?.ToString() ?? "?";
+                        results.Add($"  Type={typeName} | Name={name}");
+
+                        // List all properties and their values
+                        var props = entObj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                        foreach (var prop in props.OrderBy(p => p.Name))
+                        {
+                            try
                             {
-                                var guid = (Guid)guidObj;
-                                dynamic entity = engine.GetEntity(guid);
-                                var entObj = (object)entity;
-                                var name = entObj.GetType().GetProperty("Name")?.GetValue(entObj)?.ToString() ?? "?";
-                                string extVal = "N/A";
-                                var extProp = entObj.GetType().GetProperty("UnitExtensionType");
-                                if (extProp != null)
+                                var val = prop.GetValue(entObj)?.ToString() ?? "null";
+                                if (val.Length > 100) val = val[..100] + "...";
+                                // Only show relevant properties
+                                if (prop.Name.Contains("Extension", StringComparison.OrdinalIgnoreCase)
+                                    || prop.Name.Contains("Type", StringComparison.OrdinalIgnoreCase)
+                                    || prop.Name.Contains("Online", StringComparison.OrdinalIgnoreCase)
+                                    || prop.Name.Contains("Running", StringComparison.OrdinalIgnoreCase)
+                                    || prop.Name.Contains("IP", StringComparison.OrdinalIgnoreCase)
+                                    || prop.Name.Contains("Mac", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    try { extVal = extProp.GetValue(entObj)?.ToString() ?? "null"; }
-                                    catch (Exception ex2) { extVal = $"ERROR: {ex2.InnerException?.Message ?? ex2.Message}"; }
+                                    results.Add($"  {prop.Name} = {val}");
                                 }
-                                results.Add($"  {guid} | Name={name} | UnitExtensionType={extVal}");
+                            }
+                            catch (Exception ex2)
+                            {
+                                results.Add($"  {prop.Name} = ERROR: {ex2.InnerException?.Message ?? ex2.Message}");
                             }
                         }
                     }
-                    results.Add($"GetEntities(Unit) after query: {count} entity GUID(s)");
+                    catch (Exception ex2)
+                    {
+                        results.Add($"Row {shown} error: {ex2.InnerException?.Message ?? ex2.Message}");
+                    }
+                    shown++;
                 }
             }
             catch (Exception ex)

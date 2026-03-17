@@ -528,8 +528,8 @@ public class AccessControlService
                 ?? throw new InvalidOperationException(
                     $"Could not find Add({entityTypeEnum.Name}) on {filterObj.GetType().Name}. " +
                     $"Available methods: {string.Join(", ", filterObj.GetType().GetMethods().Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
-            // Call Add with just the EntityType (params byte[] will default to empty)
-            addMethod.Invoke(filterObj, new[] { unitValue });
+            // Call Add with EntityType + empty byte[] for the params argument
+            addMethod.Invoke(filterObj, new object[] { unitValue, Array.Empty<byte>() });
 
             // Execute query via reflection
             var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes)

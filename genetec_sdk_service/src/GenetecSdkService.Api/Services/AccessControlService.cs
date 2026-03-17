@@ -513,13 +513,28 @@ public class AccessControlService
                     $"Could not find CreateReportQuery({reportTypeEnum.Name}) on ReportManager. " +
                     $"Available methods: {string.Join(", ", rmType.GetMethods().Where(m => m.Name.Contains("Create")).Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
 
-            dynamic query = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
+            var queryObj = createQueryMethod.Invoke(reportManager, new[] { entityConfigValue })!;
+            var queryType = queryObj.GetType();
 
-            // Filter to Unit entities
-            query.EntityTypeFilter.Add(unitValue);
+            // Filter to Unit entities via reflection (dynamic dispatch fails on SDK collection types)
+            var filterProp = queryType.GetProperty("EntityTypeFilter")
+                ?? throw new InvalidOperationException(
+                    $"Could not find EntityTypeFilter on {queryType.Name}. " +
+                    $"Available properties: {string.Join(", ", queryType.GetProperties().Select(p => p.Name))}");
+            var filterObj = filterProp.GetValue(queryObj)!;
+            var addMethod = filterObj.GetType().GetMethods()
+                .FirstOrDefault(m => m.Name == "Add" && m.GetParameters().Length >= 1
+                    && m.GetParameters()[0].ParameterType == entityTypeEnum)
+                ?? throw new InvalidOperationException(
+                    $"Could not find Add({entityTypeEnum.Name}) on {filterObj.GetType().Name}. " +
+                    $"Available methods: {string.Join(", ", filterObj.GetType().GetMethods().Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
+            // Call Add with just the EntityType (params byte[] will default to empty)
+            addMethod.Invoke(filterObj, new[] { unitValue });
 
-            // Execute query
-            var queryResult = query.Query();
+            // Execute query via reflection
+            var queryMethod = queryType.GetMethod("Query", Type.EmptyTypes)
+                ?? queryType.GetMethods().First(m => m.Name == "Query");
+            dynamic queryResult = queryMethod.Invoke(queryObj, null)!;
 
             var cloudlinks = new List<CloudlinkInfo>();
             foreach (System.Data.DataRow row in queryResult.Data.Rows)

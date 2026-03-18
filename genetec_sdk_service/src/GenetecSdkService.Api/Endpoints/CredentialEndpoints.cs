@@ -7,6 +7,24 @@ public static class CredentialEndpoints
 {
     public static void MapCredentialEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/credentials", async (CredentialService service) =>
+        {
+            try
+            {
+                var result = await service.QueryCredentialsAsync();
+                return Results.Ok(ApiResponse<QueryCredentialsResponse>.Ok(result));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<QueryCredentialsResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<QueryCredentialsResponse>.Fail(msg));
+            }
+        });
+
         app.MapPost("/api/credentials", (CredentialRequest request, CredentialService service) =>
         {
             try

@@ -311,6 +311,40 @@ public class AssignCredentialResponse
     public string? PreviousCardholderGuid { get; set; }
 }
 
+// Cardholder query models
+
+public class CardholderInfo
+{
+    public string Guid { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string? EmailAddress { get; set; }
+    public string? MobilePhone { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class QueryCardholdersResponse
+{
+    public List<CardholderInfo> Cardholders { get; set; } = new();
+}
+
+// Credential query models
+
+public class CredentialInfo
+{
+    public string Guid { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string FormatType { get; set; } = string.Empty;
+    public string? CardholderGuid { get; set; }
+    public string? CardholderName { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class QueryCredentialsResponse
+{
+    public List<CredentialInfo> Credentials { get; set; } = new();
+}
+
 // Cleanup models
 
 public class CleanupEntityTypeResult

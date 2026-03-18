@@ -457,6 +457,71 @@ async def query_cloudlink(ctx: Context) -> str:
 
 
 @mcp.tool()
+async def query_cardholders(ctx: Context) -> str:
+    """Query all cardholders in Genetec Security Center.
+
+    Returns a list of cardholders with their names, email, status, and GUIDs.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        cardholders = connection.query_cardholders()
+        if not cardholders:
+            return "No cardholders found in Security Center."
+        lines = [f"Found {len(cardholders)} cardholder(s):\n"]
+        for ch in cardholders:
+            first = ch.get("firstName", "")
+            last = ch.get("lastName", "")
+            email = ch.get("emailAddress") or ""
+            status = ch.get("status", "Unknown")
+            guid = ch.get("guid", "")
+            parts = [f"{first} {last}".strip()]
+            if email:
+                parts.append(f"Email: {email}")
+            parts.append(f"Status: {status}")
+            parts.append(f"GUID: {guid}")
+            lines.append(f"- {' | '.join(parts)}")
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def query_credentials(ctx: Context) -> str:
+    """Query all credentials in Genetec Security Center.
+
+    Returns a list of credentials with their names, format, assigned cardholder,
+    status, and GUIDs.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        credentials = connection.query_credentials()
+        if not credentials:
+            return "No credentials found in Security Center."
+        lines = [f"Found {len(credentials)} credential(s):\n"]
+        for cred in credentials:
+            name = cred.get("name", "Unnamed")
+            fmt = cred.get("formatType", "Unknown")
+            ch_name = cred.get("cardholderName")
+            status = cred.get("status", "Unknown")
+            guid = cred.get("guid", "")
+            parts = [name, f"Format: {fmt}"]
+            if ch_name:
+                parts.append(f"Cardholder: {ch_name}")
+            else:
+                parts.append("Cardholder: (unassigned)")
+            parts.append(f"Status: {status}")
+            parts.append(f"GUID: {guid}")
+            lines.append(f"- {' | '.join(parts)}")
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def assign_credential(
     ctx: Context,
     credential_guid: str,

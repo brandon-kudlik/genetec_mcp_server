@@ -918,6 +918,104 @@ class TestAssignCredential:
         conn.dispose()
 
 
+class TestQueryCardholders:
+    """Tests for querying cardholders."""
+
+    def test_returns_cardholders_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cardholders": [
+                    {"guid": "ch-guid-1", "firstName": "John", "lastName": "Doe", "emailAddress": "john@example.com", "mobilePhone": None, "status": "Active"},
+                    {"guid": "ch-guid-2", "firstName": "Jane", "lastName": "Smith", "emailAddress": None, "mobilePhone": "+15551234567", "status": "Active"},
+                ]}}
+            )
+            result = conn.query_cardholders()
+        assert len(result) == 2
+        assert result[0]["guid"] == "ch-guid-1"
+        assert result[1]["firstName"] == "Jane"
+        conn.dispose()
+
+    def test_returns_empty_list_when_none_found(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cardholders": []}}
+            )
+            result = conn.query_cardholders()
+        assert result == []
+        conn.dispose()
+
+    def test_calls_correct_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"cardholders": []}}
+            )
+            conn.query_cardholders()
+            mock_get.assert_called_once_with("/api/cardholders")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.query_cardholders()
+        conn.dispose()
+
+
+class TestQueryCredentials:
+    """Tests for querying credentials."""
+
+    def test_returns_credentials_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"credentials": [
+                    {"guid": "cred-guid-1", "name": "Badge-001", "formatType": "Standard 26 bit", "cardholderGuid": "ch-guid-1", "cardholderName": "John Doe", "status": "Active"},
+                    {"guid": "cred-guid-2", "name": "Badge-002", "formatType": "H10306", "cardholderGuid": None, "cardholderName": None, "status": "Active"},
+                ]}}
+            )
+            result = conn.query_credentials()
+        assert len(result) == 2
+        assert result[0]["guid"] == "cred-guid-1"
+        assert result[1]["name"] == "Badge-002"
+        conn.dispose()
+
+    def test_returns_empty_list_when_none_found(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"credentials": []}}
+            )
+            result = conn.query_credentials()
+        assert result == []
+        conn.dispose()
+
+    def test_calls_correct_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"credentials": []}}
+            )
+            conn.query_credentials()
+            mock_get.assert_called_once_with("/api/credentials")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.query_credentials()
+        conn.dispose()
+
+
 class TestCreateCredential:
     """Tests for creating credentials."""
 

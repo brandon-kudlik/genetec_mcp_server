@@ -1042,6 +1042,158 @@ class TestAssignCredentialTool:
         assert "SDK failure" in result
 
 
+class TestQueryCardholdersTool:
+    """Tests for the query_cardholders MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "query_cardholders" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import query_cardholders
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cardholders(mock_ctx)
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_formatted_cardholder_list(self):
+        from genetec_mcp_server.server import query_cardholders
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cardholders.return_value = [
+            {"guid": "ch-guid-1", "firstName": "John", "lastName": "Doe", "emailAddress": "john@example.com", "mobilePhone": None, "status": "Active"},
+            {"guid": "ch-guid-2", "firstName": "Jane", "lastName": "Smith", "emailAddress": None, "mobilePhone": None, "status": "Inactive"},
+        ]
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cardholders(mock_ctx)
+        assert "ch-guid-1" in result
+        assert "John" in result
+        assert "Doe" in result
+        assert "john@example.com" in result
+        assert "Active" in result
+        assert "ch-guid-2" in result
+        assert "Jane" in result
+        assert "Inactive" in result
+        mock_conn.query_cardholders.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_no_cardholders_message(self):
+        from genetec_mcp_server.server import query_cardholders
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cardholders.return_value = []
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cardholders(mock_ctx)
+        assert "no cardholder" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import query_cardholders
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_cardholders.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_cardholders(mock_ctx)
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
+class TestQueryCredentialsTool:
+    """Tests for the query_credentials MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "query_credentials" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import query_credentials
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_credentials(mock_ctx)
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_formatted_credential_list(self):
+        from genetec_mcp_server.server import query_credentials
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_credentials.return_value = [
+            {"guid": "cred-guid-1", "name": "Badge-001", "formatType": "Standard 26 bit", "cardholderGuid": "ch-guid-1", "cardholderName": "John Doe", "status": "Active"},
+            {"guid": "cred-guid-2", "name": "Badge-002", "formatType": "H10306", "cardholderGuid": None, "cardholderName": None, "status": "Active"},
+        ]
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_credentials(mock_ctx)
+        assert "cred-guid-1" in result
+        assert "Badge-001" in result
+        assert "Standard 26 bit" in result
+        assert "John Doe" in result
+        assert "cred-guid-2" in result
+        assert "Badge-002" in result
+        mock_conn.query_credentials.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_no_credentials_message(self):
+        from genetec_mcp_server.server import query_credentials
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_credentials.return_value = []
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_credentials(mock_ctx)
+        assert "no credential" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import query_credentials
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_credentials.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_credentials(mock_ctx)
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestCreateCredentialTool:
     """Tests for the create_credential MCP tool."""
 

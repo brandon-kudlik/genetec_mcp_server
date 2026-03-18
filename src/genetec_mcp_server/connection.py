@@ -405,6 +405,32 @@ class GenetecConnection:
 
         return self._post("/api/access-rules/batch", {"accessRules": access_rules})
 
+    def query_cardholders(self) -> list[dict[str, Any]]:
+        """Query all cardholder entities in Security Center.
+
+        Returns:
+            List of cardholder dicts with guid, firstName, lastName, emailAddress,
+            mobilePhone, status.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        data = self._get("/api/cardholders")
+        return data.get("cardholders", [])
+
+    def query_credentials(self) -> list[dict[str, Any]]:
+        """Query all credential entities in Security Center.
+
+        Returns:
+            List of credential dicts with guid, name, formatType, cardholderGuid,
+            cardholderName, status.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        data = self._get("/api/credentials")
+        return data.get("credentials", [])
+
     def query_cloudlinks(self) -> list[dict[str, Any]]:
         """Query all Cloudlink access control units in Security Center.
 

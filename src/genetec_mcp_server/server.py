@@ -457,6 +457,68 @@ async def query_cloudlink(ctx: Context) -> str:
 
 
 @mcp.tool()
+async def create_credential(
+    ctx: Context,
+    name: str,
+    format_type: str,
+    facility: Optional[int] = None,
+    card_id: Optional[int] = None,
+    code: Optional[int] = None,
+    license_plate: Optional[str] = None,
+    raw_data: Optional[str] = None,
+    bit_length: Optional[int] = None,
+    cardholder_guid: Optional[str] = None,
+) -> str:
+    """Create a credential (card, PIN, license plate) in Genetec Security Center.
+
+    Credentials are identification tokens used for access control. They can
+    be assigned to cardholders to grant access through doors.
+
+    Args:
+        name: Display name for the credential (e.g. 'Card-001').
+        format_type: Credential format type. Valid types:
+            - WiegandStandard26Bit: Standard 26-bit Wiegand (requires facility + card_id)
+            - WiegandH10306: HID H10306 34-bit (requires facility + card_id)
+            - WiegandH10304: HID H10304 37-bit (requires facility + card_id)
+            - WiegandH10302: HID H10302 37-bit (requires card_id only)
+            - WiegandCsn32: 32-bit CSN (requires card_id only)
+            - WiegandCorporate1000: Corporate 1000 35-bit (requires facility + card_id)
+            - Wiegand48BitCorporate1000: 48-bit Corporate 1000 (requires facility + card_id)
+            - Keypad: PIN code (requires code)
+            - LicensePlate: License plate recognition (requires license_plate)
+            - RawCard: Raw hex data (requires raw_data + bit_length)
+        facility: Facility code (for Wiegand formats that require it).
+        card_id: Card ID number (for Wiegand formats).
+        code: PIN code integer (for Keypad format).
+        license_plate: License plate string (for LicensePlate format).
+        raw_data: Raw hex data string (for RawCard format).
+        bit_length: Bit length of raw data (for RawCard format).
+        cardholder_guid: GUID of a cardholder to assign this credential to (optional).
+
+    Returns:
+        The GUID of the newly created credential, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        guid = connection.create_credential(
+            name=name,
+            format_type=format_type,
+            facility=facility,
+            card_id=card_id,
+            code=code,
+            license_plate=license_plate,
+            raw_data=raw_data,
+            bit_length=bit_length,
+            cardholder_guid=cardholder_guid,
+        )
+        return f"Credential created: {name} ({format_type}) (GUID: {guid})"
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def cleanup_demo(ctx: Context) -> str:
     """Delete all demo entities from Security Center while preserving Cloudlink units.
 

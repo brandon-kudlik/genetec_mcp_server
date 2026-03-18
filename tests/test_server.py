@@ -947,6 +947,116 @@ class TestCleanupDemoTool:
         assert "SDK failure" in result
 
 
+class TestCreateCredentialTool:
+    """Tests for the create_credential MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "create_credential" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import create_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_credential(
+            mock_ctx,
+            name="Card-001",
+            format_type="WiegandStandard26Bit",
+            facility=100,
+            card_id=12345,
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_guid_on_success(self):
+        from genetec_mcp_server.server import create_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_credential.return_value = "cred-guid-123"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_credential(
+            mock_ctx,
+            name="Card-001",
+            format_type="WiegandStandard26Bit",
+            facility=100,
+            card_id=12345,
+        )
+        assert "cred-guid-123" in result
+        mock_conn.create_credential.assert_called_once_with(
+            name="Card-001",
+            format_type="WiegandStandard26Bit",
+            facility=100,
+            card_id=12345,
+            code=None,
+            license_plate=None,
+            raw_data=None,
+            bit_length=None,
+            cardholder_guid=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import create_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_credential.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await create_credential(
+            mock_ctx,
+            name="Card-001",
+            format_type="WiegandStandard26Bit",
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+    @pytest.mark.asyncio
+    async def test_passes_cardholder_guid(self):
+        from genetec_mcp_server.server import create_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.create_credential.return_value = "cred-guid-456"
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        await create_credential(
+            mock_ctx,
+            name="Card-002",
+            format_type="WiegandStandard26Bit",
+            facility=100,
+            card_id=99999,
+            cardholder_guid="ch-guid-1",
+        )
+        mock_conn.create_credential.assert_called_once_with(
+            name="Card-002",
+            format_type="WiegandStandard26Bit",
+            facility=100,
+            card_id=99999,
+            code=None,
+            license_plate=None,
+            raw_data=None,
+            bit_length=None,
+            cardholder_guid="ch-guid-1",
+        )
+
+
 class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 

@@ -848,3 +848,128 @@ class TestCleanupDemo:
             timeout = call_args.kwargs.get("timeout")
             assert timeout == 300.0
         conn.dispose()
+
+
+class TestCreateCredential:
+    """Tests for creating credentials."""
+
+    def test_returns_guid_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "cred-guid-123"}}
+            )
+            guid = conn.create_credential(
+                name="Card-001",
+                format_type="WiegandStandard26Bit",
+                facility=100,
+                card_id=12345,
+            )
+        assert guid == "cred-guid-123"
+        conn.dispose()
+
+    def test_requires_name(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="name"):
+            conn.create_credential(
+                name="",
+                format_type="WiegandStandard26Bit",
+                facility=100,
+                card_id=12345,
+            )
+        conn.dispose()
+
+    def test_requires_format_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="format_type"):
+            conn.create_credential(
+                name="Card-001",
+                format_type="",
+                facility=100,
+                card_id=12345,
+            )
+        conn.dispose()
+
+    def test_requires_valid_format_type(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="Unknown format_type"):
+            conn.create_credential(
+                name="Card-001",
+                format_type="InvalidFormat",
+            )
+        conn.dispose()
+
+    def test_sends_correct_post_body_wiegand(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "cred-guid-123"}}
+            )
+            conn.create_credential(
+                name="Card-001",
+                format_type="WiegandStandard26Bit",
+                facility=100,
+                card_id=12345,
+                cardholder_guid="ch-guid-1",
+            )
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body["name"] == "Card-001"
+            assert body["formatType"] == "WiegandStandard26Bit"
+            assert body["facility"] == 100
+            assert body["cardId"] == 12345
+            assert body["cardholderGuid"] == "ch-guid-1"
+            mock_post.assert_called_once_with(
+                "/api/credentials",
+                json=body,
+            )
+        conn.dispose()
+
+    def test_sends_keypad_format(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "cred-guid-456"}}
+            )
+            conn.create_credential(
+                name="PIN-001",
+                format_type="Keypad",
+                code=1234,
+            )
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body["formatType"] == "Keypad"
+            assert body["code"] == 1234
+        conn.dispose()
+
+    def test_sends_license_plate_format(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"guid": "cred-guid-789"}}
+            )
+            conn.create_credential(
+                name="Plate-001",
+                format_type="LicensePlate",
+                license_plate="ABC1234",
+            )
+            call_args = mock_post.call_args
+            body = call_args.kwargs.get("json") or call_args[1].get("json")
+            assert body["formatType"] == "LicensePlate"
+            assert body["licensePlate"] == "ABC1234"
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Failed to create credential."}
+            )
+            with pytest.raises(RuntimeError, match="Failed to create credential"):
+                conn.create_credential(
+                    name="Card-001",
+                    format_type="WiegandStandard26Bit",
+                    facility=100,
+                    card_id=12345,
+                )
+        conn.dispose()

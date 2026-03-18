@@ -446,6 +446,76 @@ class GenetecConnection:
 
         return self._post("/api/event-to-actions", {"mappings": mappings})
 
+    CREDENTIAL_FORMAT_TYPES = {
+        "WiegandStandard26Bit", "WiegandH10306", "WiegandH10304",
+        "WiegandH10302", "WiegandCsn32", "WiegandCorporate1000",
+        "Wiegand48BitCorporate1000", "Keypad", "LicensePlate", "RawCard",
+    }
+
+    def create_credential(
+        self,
+        name: str,
+        format_type: str,
+        facility: Optional[int] = None,
+        card_id: Optional[int] = None,
+        code: Optional[int] = None,
+        license_plate: Optional[str] = None,
+        raw_data: Optional[str] = None,
+        bit_length: Optional[int] = None,
+        cardholder_guid: Optional[str] = None,
+    ) -> str:
+        """Create a credential entity via the SDK service.
+
+        Args:
+            name: Display name for the credential (required).
+            format_type: Credential format type (required). Valid types:
+                WiegandStandard26Bit, WiegandH10306, WiegandH10304,
+                WiegandH10302, WiegandCsn32, WiegandCorporate1000,
+                Wiegand48BitCorporate1000, Keypad, LicensePlate, RawCard.
+            facility: Facility code (for Wiegand formats).
+            card_id: Card ID number (for Wiegand formats).
+            code: PIN code (for Keypad format).
+            license_plate: License plate string (for LicensePlate format).
+            raw_data: Raw hex data string (for RawCard format).
+            bit_length: Bit length (for RawCard format).
+            cardholder_guid: GUID of cardholder to assign credential to (optional).
+
+        Returns:
+            The GUID string of the newly created credential.
+
+        Raises:
+            ValueError: If required parameters are missing or format_type is invalid.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not name:
+            raise ValueError("name is required and cannot be empty.")
+        if not format_type:
+            raise ValueError("format_type is required and cannot be empty.")
+        if format_type not in self.CREDENTIAL_FORMAT_TYPES:
+            raise ValueError(
+                f"Unknown format_type '{format_type}'. "
+                f"Valid types: {sorted(self.CREDENTIAL_FORMAT_TYPES)}"
+            )
+
+        body: dict[str, Any] = {"name": name, "formatType": format_type}
+        if facility is not None:
+            body["facility"] = facility
+        if card_id is not None:
+            body["cardId"] = card_id
+        if code is not None:
+            body["code"] = code
+        if license_plate is not None:
+            body["licensePlate"] = license_plate
+        if raw_data is not None:
+            body["rawData"] = raw_data
+        if bit_length is not None:
+            body["bitLength"] = bit_length
+        if cardholder_guid is not None:
+            body["cardholderGuid"] = cardholder_guid
+
+        data = self._post("/api/credentials", body)
+        return data["guid"]
+
     def cleanup_demo(self) -> dict[str, Any]:
         """Delete all demo entities (cardholders, doors, alarms, access rules, etc.)
         while preserving enrolled Cloudlink units.

@@ -35,6 +35,7 @@ builder.Services.AddSingleton<AlarmService>();
 builder.Services.AddSingleton<EventToActionService>();
 builder.Services.AddSingleton<AccessRuleService>();
 builder.Services.AddSingleton<CleanupService>();
+builder.Services.AddSingleton<CredentialService>();
 
 var app = builder.Build();
 
@@ -47,5 +48,6 @@ app.MapAlarmEndpoints();
 app.MapEventToActionEndpoints();
 app.MapAccessRuleEndpoints();
 app.MapCleanupEndpoints();
+app.MapCredentialEndpoints();
 
 app.Run();

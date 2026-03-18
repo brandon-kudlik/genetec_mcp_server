@@ -276,6 +276,26 @@ public class BatchCreateAccessRulesResponse
     public int CreatedCount { get; set; }
 }
 
+// Credential models
+
+public class CredentialRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string FormatType { get; set; } = string.Empty;
+    public int? Facility { get; set; }
+    public int? CardId { get; set; }
+    public int? Code { get; set; }
+    public string? LicensePlate { get; set; }
+    public string? RawData { get; set; }
+    public int? BitLength { get; set; }
+    public string? CardholderGuid { get; set; }
+}
+
+public class CredentialResponse
+{
+    public string Guid { get; set; } = string.Empty;
+}
+
 // Cleanup models
 
 public class CleanupEntityTypeResult

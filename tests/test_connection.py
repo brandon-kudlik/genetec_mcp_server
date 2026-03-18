@@ -1139,3 +1139,114 @@ class TestCreateCredential:
                     card_id=12345,
                 )
         conn.dispose()
+
+
+class TestQueryAccessRules:
+    """Tests for querying access rules."""
+
+    def test_returns_access_rules_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"accessRules": [
+                    {"guid": "rule-guid-1", "name": "All Access"},
+                    {"guid": "rule-guid-2", "name": "Main Entrance"},
+                ]}}
+            )
+            result = conn.query_access_rules()
+        assert len(result) == 2
+        assert result[0]["guid"] == "rule-guid-1"
+        assert result[1]["name"] == "Main Entrance"
+        conn.dispose()
+
+    def test_returns_empty_list_when_none_found(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"accessRules": []}}
+            )
+            result = conn.query_access_rules()
+        assert result == []
+        conn.dispose()
+
+    def test_calls_correct_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": True, "data": {"accessRules": []}}
+            )
+            conn.query_access_rules()
+            mock_get.assert_called_once_with("/api/access-rules")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "get") as mock_get:
+            mock_get.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.query_access_rules()
+        conn.dispose()
+
+
+class TestAssignAccessRules:
+    """Tests for assigning access rules to cardholders."""
+
+    def test_returns_assignments_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"assignments": [
+                    {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-1", "status": "Assigned", "error": None},
+                    {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-2", "status": "Assigned", "error": None},
+                ]}}
+            )
+            result = conn.assign_access_rules(
+                access_rule_guids=["rule-1"],
+                cardholder_guids=["ch-1", "ch-2"],
+            )
+        assert len(result["assignments"]) == 2
+        assert result["assignments"][0]["status"] == "Assigned"
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {"assignments": []}}
+            )
+            conn.assign_access_rules(
+                access_rule_guids=["rule-1", "rule-2"],
+                cardholder_guids=["ch-1"],
+            )
+            mock_post.assert_called_once_with(
+                "/api/access-rules/assign",
+                json={"accessRuleGuids": ["rule-1", "rule-2"], "cardholderGuids": ["ch-1"]},
+            )
+        conn.dispose()
+
+    def test_requires_non_empty_access_rule_guids(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="access_rule_guids"):
+            conn.assign_access_rules(access_rule_guids=[], cardholder_guids=["ch-1"])
+        conn.dispose()
+
+    def test_requires_non_empty_cardholder_guids(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="cardholder_guids"):
+            conn.assign_access_rules(access_rule_guids=["rule-1"], cardholder_guids=[])
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.assign_access_rules(
+                    access_rule_guids=["rule-1"],
+                    cardholder_guids=["ch-1"],
+                )
+        conn.dispose()

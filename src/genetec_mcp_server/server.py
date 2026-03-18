@@ -620,6 +620,71 @@ async def create_credential(
 
 
 @mcp.tool()
+async def query_access_rules(ctx: Context) -> str:
+    """Query all access rules in Genetec Security Center.
+
+    Returns a list of access rules with their names and GUIDs.
+    Use the returned GUIDs with assign_access_rules to assign rules to cardholders.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        rules = connection.query_access_rules()
+        if not rules:
+            return "No access rules found."
+        lines = [f"Found {len(rules)} access rule(s):\n"]
+        for rule in rules:
+            lines.append(f"- {rule.get('name', 'Unnamed')} (GUID: {rule.get('guid', '')})")
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
+async def assign_access_rules(
+    ctx: Context,
+    access_rule_guids: list[str],
+    cardholder_guids: list[str],
+) -> str:
+    """Assign access rules to cardholders in Genetec Security Center.
+
+    Assigns each access rule to each cardholder (many-to-many). Use
+    query_access_rules to find access rule GUIDs and query_cardholders to
+    find cardholder GUIDs.
+
+    Args:
+        access_rule_guids: List of access rule GUIDs to assign.
+        cardholder_guids: List of cardholder GUIDs to assign rules to.
+
+    Returns:
+        A summary of assignment results, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.assign_access_rules(
+            access_rule_guids=access_rule_guids,
+            cardholder_guids=cardholder_guids,
+        )
+        assignments = result.get("assignments", [])
+        lines = ["Access Rule Assignment Results:"]
+        for a in assignments:
+            rule_guid = a.get("accessRuleGuid", "")
+            ch_guid = a.get("cardholderGuid", "")
+            status = a.get("status", "")
+            error = a.get("error")
+            line = f"- Access rule {rule_guid} → cardholder {ch_guid}: {status}"
+            if error:
+                line += f" ({error})"
+            lines.append(line)
+        return "\n".join(lines)
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def cleanup_demo(ctx: Context) -> str:
     """Delete all demo entities from Security Center while preserving Cloudlink units.
 

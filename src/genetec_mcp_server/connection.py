@@ -570,6 +570,46 @@ class GenetecConnection:
             "cardholderGuid": cardholder_guid,
         })
 
+    def query_access_rules(self) -> list[dict[str, Any]]:
+        """Query all access rule entities in Security Center.
+
+        Returns:
+            List of access rule dicts with guid and name.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        data = self._get("/api/access-rules")
+        return data.get("accessRules", [])
+
+    def assign_access_rules(
+        self,
+        access_rule_guids: list[str],
+        cardholder_guids: list[str],
+    ) -> dict[str, Any]:
+        """Assign access rules to cardholders via the SDK service.
+
+        Args:
+            access_rule_guids: List of access rule GUIDs to assign.
+            cardholder_guids: List of cardholder GUIDs to assign rules to.
+
+        Returns:
+            Response dict with 'assignments' list of results.
+
+        Raises:
+            ValueError: If either list is empty.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not access_rule_guids:
+            raise ValueError("access_rule_guids is required and cannot be empty.")
+        if not cardholder_guids:
+            raise ValueError("cardholder_guids is required and cannot be empty.")
+
+        return self._post("/api/access-rules/assign", {
+            "accessRuleGuids": access_rule_guids,
+            "cardholderGuids": cardholder_guids,
+        })
+
     def cleanup_demo(self) -> dict[str, Any]:
         """Delete all demo entities (cardholders, doors, alarms, access rules, etc.)
         while preserving enrolled Cloudlink units.

@@ -1324,3 +1324,137 @@ class TestLifespan:
                 mock_instance.connect.assert_called_once()
 
             mock_instance.dispose.assert_called_once()
+
+
+class TestQueryAccessRulesTool:
+    """Tests for the query_access_rules MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "query_access_rules" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import query_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_access_rules(mock_ctx)
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_formatted_list(self):
+        from genetec_mcp_server.server import query_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_access_rules.return_value = [
+            {"guid": "rule-guid-1", "name": "All Access"},
+            {"guid": "rule-guid-2", "name": "Main Entrance"},
+        ]
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_access_rules(mock_ctx)
+        assert "All Access" in result
+        assert "rule-guid-1" in result
+        assert "Main Entrance" in result
+        assert "rule-guid-2" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_no_rules_message_when_empty(self):
+        from genetec_mcp_server.server import query_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.query_access_rules.return_value = []
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await query_access_rules(mock_ctx)
+        assert "no access rules" in result.lower()
+
+
+class TestAssignAccessRulesTool:
+    """Tests for the assign_access_rules MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "assign_access_rules" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import assign_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_access_rules(mock_ctx, access_rule_guids=["rule-1"], cardholder_guids=["ch-1"])
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_assignment_results_on_success(self):
+        from genetec_mcp_server.server import assign_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.assign_access_rules.return_value = {
+            "assignments": [
+                {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-1", "status": "Assigned", "error": None},
+                {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-2", "status": "Assigned", "error": None},
+            ]
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_access_rules(
+            mock_ctx,
+            access_rule_guids=["rule-1"],
+            cardholder_guids=["ch-1", "ch-2"],
+        )
+        assert "rule-1" in result
+        assert "ch-1" in result
+        assert "Assigned" in result
+        mock_conn.assign_access_rules.assert_called_once_with(
+            access_rule_guids=["rule-1"],
+            cardholder_guids=["ch-1", "ch-2"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_shows_failures_in_output(self):
+        from genetec_mcp_server.server import assign_access_rules
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.assign_access_rules.return_value = {
+            "assignments": [
+                {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-1", "status": "Assigned", "error": None},
+                {"accessRuleGuid": "rule-1", "cardholderGuid": "ch-bad", "status": "Failed", "error": "entity not found"},
+            ]
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_access_rules(
+            mock_ctx,
+            access_rule_guids=["rule-1"],
+            cardholder_guids=["ch-1", "ch-bad"],
+        )
+        assert "Failed" in result
+        assert "entity not found" in result
+        assert "Assigned" in result

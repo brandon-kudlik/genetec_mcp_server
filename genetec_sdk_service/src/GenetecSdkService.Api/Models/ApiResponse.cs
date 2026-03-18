@@ -345,6 +345,38 @@ public class QueryCredentialsResponse
     public List<CredentialInfo> Credentials { get; set; } = new();
 }
 
+// Access rule query and assignment models
+
+public class AccessRuleInfo
+{
+    public string Guid { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+}
+
+public class QueryAccessRulesResponse
+{
+    public List<AccessRuleInfo> AccessRules { get; set; } = new();
+}
+
+public class AssignAccessRulesRequest
+{
+    public List<string> AccessRuleGuids { get; set; } = new();
+    public List<string> CardholderGuids { get; set; } = new();
+}
+
+public class AccessRuleAssignmentResult
+{
+    public string AccessRuleGuid { get; set; } = string.Empty;
+    public string CardholderGuid { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? Error { get; set; }
+}
+
+public class AssignAccessRulesResponse
+{
+    public List<AccessRuleAssignmentResult> Assignments { get; set; } = new();
+}
+
 // Cleanup models
 
 public class CleanupEntityTypeResult

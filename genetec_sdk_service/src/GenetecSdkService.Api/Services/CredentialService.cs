@@ -68,6 +68,50 @@ public class CredentialService
         return new CredentialResponse { Guid = credentialGuidStr };
     }
 
+    public AssignCredentialResponse AssignCredential(AssignCredentialRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.CredentialGuid))
+            throw new ArgumentException("credentialGuid is required and cannot be empty.");
+        if (string.IsNullOrWhiteSpace(request.CardholderGuid))
+            throw new ArgumentException("cardholderGuid is required and cannot be empty.");
+        if (!_engineService.IsConnected)
+            throw new InvalidOperationException("Not connected to Security Center.");
+
+        var engine = _engineService.Engine;
+        var credentialGuid = new Guid(request.CredentialGuid);
+        var cardholderGuid = new Guid(request.CardholderGuid);
+
+        // Get credential entity to check current assignment
+        dynamic credential = engine.GetEntity(credentialGuid);
+        if (credential == null)
+            throw new InvalidOperationException($"Credential entity '{request.CredentialGuid}' not found.");
+
+        Guid previousCardholderGuid = credential.CardholderGuid;
+        string? previousCardholderGuidStr = previousCardholderGuid != Guid.Empty
+            ? previousCardholderGuid.ToString()
+            : null;
+
+        // If already assigned to a different cardholder, unassign first
+        if (previousCardholderGuid != Guid.Empty && previousCardholderGuid != cardholderGuid)
+        {
+            credential.CardholderGuid = Guid.Empty;
+        }
+
+        // Assign to the new cardholder
+        dynamic cardholder = engine.GetEntity(cardholderGuid);
+        if (cardholder == null)
+            throw new InvalidOperationException($"Cardholder entity '{request.CardholderGuid}' not found.");
+
+        cardholder.Credentials.Add(credentialGuid);
+
+        return new AssignCredentialResponse
+        {
+            CredentialGuid = request.CredentialGuid,
+            CardholderGuid = request.CardholderGuid,
+            PreviousCardholderGuid = previousCardholderGuidStr,
+        };
+    }
+
     private static object CreateFormat(CredentialRequest request)
     {
         // Load credential format types from SDK assembly

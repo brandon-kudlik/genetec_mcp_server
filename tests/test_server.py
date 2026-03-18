@@ -947,6 +947,101 @@ class TestCleanupDemoTool:
         assert "SDK failure" in result
 
 
+class TestAssignCredentialTool:
+    """Tests for the assign_credential MCP tool."""
+
+    def test_tool_is_registered(self):
+        from genetec_mcp_server.server import mcp
+
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "assign_credential" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_returns_error_when_not_connected(self):
+        from genetec_mcp_server.server import assign_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = False
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_credential(
+            mock_ctx,
+            credential_guid="cred-guid-1",
+            cardholder_guid="ch-guid-1",
+        )
+        assert "not connected" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_success_message(self):
+        from genetec_mcp_server.server import assign_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.assign_credential.return_value = {
+            "credentialGuid": "cred-guid-1",
+            "cardholderGuid": "ch-guid-1",
+            "previousCardholderGuid": None,
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_credential(
+            mock_ctx,
+            credential_guid="cred-guid-1",
+            cardholder_guid="ch-guid-1",
+        )
+        assert "cred-guid-1" in result
+        assert "ch-guid-1" in result
+        mock_conn.assign_credential.assert_called_once_with(
+            credential_guid="cred-guid-1",
+            cardholder_guid="ch-guid-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_notes_reassignment(self):
+        from genetec_mcp_server.server import assign_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.assign_credential.return_value = {
+            "credentialGuid": "cred-guid-1",
+            "cardholderGuid": "ch-guid-2",
+            "previousCardholderGuid": "ch-guid-1",
+        }
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_credential(
+            mock_ctx,
+            credential_guid="cred-guid-1",
+            cardholder_guid="ch-guid-2",
+        )
+        assert "reassigned" in result.lower() or "previous" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_returns_error_on_runtime_error(self):
+        from genetec_mcp_server.server import assign_credential
+
+        mock_conn = MagicMock()
+        mock_conn.is_connected = True
+        mock_conn.assign_credential.side_effect = RuntimeError("SDK failure")
+
+        mock_ctx = MagicMock()
+        mock_ctx.request_context.lifespan_context.connection = mock_conn
+
+        result = await assign_credential(
+            mock_ctx,
+            credential_guid="cred-guid-1",
+            cardholder_guid="ch-guid-1",
+        )
+        assert "error" in result.lower()
+        assert "SDK failure" in result
+
+
 class TestCreateCredentialTool:
     """Tests for the create_credential MCP tool."""
 

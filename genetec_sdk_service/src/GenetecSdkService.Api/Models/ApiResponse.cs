@@ -296,6 +296,21 @@ public class CredentialResponse
     public string Guid { get; set; } = string.Empty;
 }
 
+// Credential assignment models
+
+public class AssignCredentialRequest
+{
+    public string CredentialGuid { get; set; } = string.Empty;
+    public string CardholderGuid { get; set; } = string.Empty;
+}
+
+public class AssignCredentialResponse
+{
+    public string CredentialGuid { get; set; } = string.Empty;
+    public string CardholderGuid { get; set; } = string.Empty;
+    public string? PreviousCardholderGuid { get; set; }
+}
+
 // Cleanup models
 
 public class CleanupEntityTypeResult

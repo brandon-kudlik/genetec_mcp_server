@@ -516,6 +516,34 @@ class GenetecConnection:
         data = self._post("/api/credentials", body)
         return data["guid"]
 
+    def assign_credential(
+        self,
+        credential_guid: str,
+        cardholder_guid: str,
+    ) -> dict[str, Any]:
+        """Assign an existing credential to a cardholder via the SDK service.
+
+        Args:
+            credential_guid: GUID of the credential to assign.
+            cardholder_guid: GUID of the cardholder to assign it to.
+
+        Returns:
+            Response dict with credentialGuid, cardholderGuid, previousCardholderGuid.
+
+        Raises:
+            ValueError: If credential_guid or cardholder_guid is empty.
+            RuntimeError: If the SDK service returns an error.
+        """
+        if not credential_guid:
+            raise ValueError("credential_guid is required and cannot be empty.")
+        if not cardholder_guid:
+            raise ValueError("cardholder_guid is required and cannot be empty.")
+
+        return self._post("/api/credentials/assign", {
+            "credentialGuid": credential_guid,
+            "cardholderGuid": cardholder_guid,
+        })
+
     def cleanup_demo(self) -> dict[str, Any]:
         """Delete all demo entities (cardholders, doors, alarms, access rules, etc.)
         while preserving enrolled Cloudlink units.

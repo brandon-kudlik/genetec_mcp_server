@@ -28,5 +28,26 @@ public static class CredentialEndpoints
                 return Results.Ok(ApiResponse<CredentialResponse>.Fail(msg));
             }
         });
+        app.MapPost("/api/credentials/assign", (AssignCredentialRequest request, CredentialService service) =>
+        {
+            try
+            {
+                var result = service.AssignCredential(request);
+                return Results.Ok(ApiResponse<AssignCredentialResponse>.Ok(result));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ApiResponse<AssignCredentialResponse>.Fail(ex.Message));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Ok(ApiResponse<AssignCredentialResponse>.Fail(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                return Results.Ok(ApiResponse<AssignCredentialResponse>.Fail(msg));
+            }
+        });
     }
 }

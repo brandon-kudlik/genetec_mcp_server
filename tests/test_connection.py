@@ -850,6 +850,74 @@ class TestCleanupDemo:
         conn.dispose()
 
 
+class TestAssignCredential:
+    """Tests for assigning credentials to cardholders."""
+
+    def test_returns_response_on_success(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {
+                    "credentialGuid": "cred-guid-1",
+                    "cardholderGuid": "ch-guid-1",
+                    "previousCardholderGuid": None,
+                }}
+            )
+            result = conn.assign_credential(
+                credential_guid="cred-guid-1",
+                cardholder_guid="ch-guid-1",
+            )
+        assert result["credentialGuid"] == "cred-guid-1"
+        assert result["cardholderGuid"] == "ch-guid-1"
+        assert result["previousCardholderGuid"] is None
+        conn.dispose()
+
+    def test_sends_correct_post_body(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": True, "data": {
+                    "credentialGuid": "cred-guid-1",
+                    "cardholderGuid": "ch-guid-1",
+                    "previousCardholderGuid": None,
+                }}
+            )
+            conn.assign_credential(
+                credential_guid="cred-guid-1",
+                cardholder_guid="ch-guid-1",
+            )
+            mock_post.assert_called_once_with(
+                "/api/credentials/assign",
+                json={"credentialGuid": "cred-guid-1", "cardholderGuid": "ch-guid-1"},
+            )
+        conn.dispose()
+
+    def test_requires_credential_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="credential_guid"):
+            conn.assign_credential(credential_guid="", cardholder_guid="ch-guid-1")
+        conn.dispose()
+
+    def test_requires_cardholder_guid(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with pytest.raises(ValueError, match="cardholder_guid"):
+            conn.assign_credential(credential_guid="cred-guid-1", cardholder_guid="")
+        conn.dispose()
+
+    def test_raises_on_error_response(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "post") as mock_post:
+            mock_post.return_value = _mock_response(
+                {"success": False, "error": "Credential not found."}
+            )
+            with pytest.raises(RuntimeError, match="Credential not found"):
+                conn.assign_credential(
+                    credential_guid="cred-guid-1",
+                    cardholder_guid="ch-guid-1",
+                )
+        conn.dispose()
+
+
 class TestCreateCredential:
     """Tests for creating credentials."""
 

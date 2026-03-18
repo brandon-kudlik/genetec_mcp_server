@@ -457,6 +457,42 @@ async def query_cloudlink(ctx: Context) -> str:
 
 
 @mcp.tool()
+async def assign_credential(
+    ctx: Context,
+    credential_guid: str,
+    cardholder_guid: str,
+) -> str:
+    """Assign an existing credential to a cardholder in Genetec Security Center.
+
+    Links a credential (card, PIN, license plate) to a cardholder so they can
+    use it for access control. If the credential is already assigned to a
+    different cardholder, it will be reassigned.
+
+    Args:
+        credential_guid: GUID of the credential to assign.
+        cardholder_guid: GUID of the cardholder to assign the credential to.
+
+    Returns:
+        A success message, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.assign_credential(
+            credential_guid=credential_guid,
+            cardholder_guid=cardholder_guid,
+        )
+        prev = result.get("previousCardholderGuid")
+        msg = f"Credential {result['credentialGuid']} assigned to cardholder {result['cardholderGuid']}"
+        if prev:
+            msg += f" (reassigned from previous cardholder {prev})"
+        return msg
+    except (RuntimeError, ValueError) as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def create_credential(
     ctx: Context,
     name: str,

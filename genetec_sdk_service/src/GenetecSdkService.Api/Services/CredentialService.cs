@@ -33,26 +33,39 @@ public class CredentialService
         var builderObj = getBuilderMethod.Invoke(entityManager, null)
             ?? throw new InvalidOperationException("GetCredentialBuilder returned null.");
 
-        // Use dynamic to call builder methods
-        dynamic builder = builderObj;
-        builder.SetName(request.Name);
-        builder.SetFormat(credentialFormat);
+        // Use reflection for builder methods (dynamic dispatch fails on SDK builder types)
+        var builderType = builderObj.GetType();
 
-        dynamic credential = builder.Build();
-        string credentialGuid = credential.Guid.ToString();
+        var setNameMethod = builderType.GetMethod("SetName")
+            ?? throw new InvalidOperationException("SetName method not found on credential builder.");
+        setNameMethod.Invoke(builderObj, new object[] { request.Name });
+
+        var setFormatMethod = builderType.GetMethod("SetFormat")
+            ?? throw new InvalidOperationException("SetFormat method not found on credential builder.");
+        setFormatMethod.Invoke(builderObj, new object[] { credentialFormat });
+
+        var buildMethod = builderType.GetMethod("Build")
+            ?? throw new InvalidOperationException("Build method not found on credential builder.");
+        var credentialObj = buildMethod.Invoke(builderObj, null)
+            ?? throw new InvalidOperationException("Build returned null.");
+
+        var guidProp = credentialObj.GetType().GetProperty("Guid")
+            ?? throw new InvalidOperationException("Guid property not found on credential.");
+        var credentialGuid = (Guid)guidProp.GetValue(credentialObj)!;
+        string credentialGuidStr = credentialGuid.ToString();
 
         // Assign to cardholder if specified
         if (!string.IsNullOrEmpty(request.CardholderGuid))
         {
-            var cardholderGuid = new Guid(request.CardholderGuid);
-            dynamic cardholder = engine.GetEntity(cardholderGuid);
+            var cardholderGuidParsed = new Guid(request.CardholderGuid);
+            dynamic cardholder = engine.GetEntity(cardholderGuidParsed);
             if (cardholder != null)
             {
-                cardholder.Credentials.Add(credential.Guid);
+                cardholder.Credentials.Add(credentialGuid);
             }
         }
 
-        return new CredentialResponse { Guid = credentialGuid };
+        return new CredentialResponse { Guid = credentialGuidStr };
     }
 
     private static object CreateFormat(CredentialRequest request)

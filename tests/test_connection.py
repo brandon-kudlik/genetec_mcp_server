@@ -792,3 +792,59 @@ class TestAddEventToAction:
                     "alarmGuid": "alarm-1",
                 }])
         conn.dispose()
+
+
+class TestCleanupDemo:
+    """Tests for the cleanup_demo method."""
+
+    def test_cleanup_demo_calls_delete_endpoint(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "delete") as mock_delete:
+            mock_delete.return_value = _mock_response(
+                {"success": True, "data": {"results": [], "totalDeleted": 0}}
+            )
+            conn.cleanup_demo()
+            mock_delete.assert_called_once()
+            call_args = mock_delete.call_args
+            assert call_args[0][0] == "/api/cleanup/demo"
+        conn.dispose()
+
+    def test_cleanup_demo_returns_results(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "delete") as mock_delete:
+            mock_delete.return_value = _mock_response(
+                {"success": True, "data": {
+                    "results": [
+                        {"entityType": "AccessRule", "found": 2, "deleted": 2, "errors": []},
+                        {"entityType": "Door", "found": 3, "deleted": 3, "errors": []},
+                    ],
+                    "totalDeleted": 5,
+                }}
+            )
+            result = conn.cleanup_demo()
+        assert result["totalDeleted"] == 5
+        assert len(result["results"]) == 2
+        assert result["results"][0]["entityType"] == "AccessRule"
+        conn.dispose()
+
+    def test_cleanup_demo_raises_on_error(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "delete") as mock_delete:
+            mock_delete.return_value = _mock_response(
+                {"success": False, "error": "Not connected to Security Center."}
+            )
+            with pytest.raises(RuntimeError, match="Not connected"):
+                conn.cleanup_demo()
+        conn.dispose()
+
+    def test_cleanup_demo_uses_long_timeout(self):
+        conn = GenetecConnection(base_url="http://localhost:5100")
+        with patch.object(conn._client, "delete") as mock_delete:
+            mock_delete.return_value = _mock_response(
+                {"success": True, "data": {"results": [], "totalDeleted": 0}}
+            )
+            conn.cleanup_demo()
+            call_args = mock_delete.call_args
+            timeout = call_args.kwargs.get("timeout")
+            assert timeout == 300.0
+        conn.dispose()

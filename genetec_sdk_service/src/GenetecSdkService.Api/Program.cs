@@ -34,6 +34,7 @@ builder.Services.AddSingleton<DoorService>();
 builder.Services.AddSingleton<AlarmService>();
 builder.Services.AddSingleton<EventToActionService>();
 builder.Services.AddSingleton<AccessRuleService>();
+builder.Services.AddSingleton<CleanupService>();
 
 var app = builder.Build();
 
@@ -45,5 +46,6 @@ app.MapDoorEndpoints();
 app.MapAlarmEndpoints();
 app.MapEventToActionEndpoints();
 app.MapAccessRuleEndpoints();
+app.MapCleanupEndpoints();
 
 app.Run();

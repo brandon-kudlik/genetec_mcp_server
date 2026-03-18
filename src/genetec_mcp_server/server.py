@@ -457,6 +457,38 @@ async def query_cloudlink(ctx: Context) -> str:
 
 
 @mcp.tool()
+async def cleanup_demo(ctx: Context) -> str:
+    """Delete all demo entities from Security Center while preserving Cloudlink units.
+
+    Deletes entities in dependency-safe order: access rules, alarms, doors,
+    cardholders, credentials, and interface modules (Mercury controllers + boards).
+    Cloudlink units are preserved.
+
+    Returns:
+        A summary of deleted entity counts per type, or an error message.
+    """
+    connection: GenetecConnection = ctx.request_context.lifespan_context.connection
+    if not connection.is_connected:
+        return "Error: Not connected to Security Center."
+    try:
+        result = connection.cleanup_demo()
+        total = result.get("totalDeleted", 0)
+        lines = [f"Demo cleanup complete. Deleted {total} entity(ies):\n"]
+        for r in result.get("results", []):
+            entity_type = r.get("entityType", "Unknown")
+            found = r.get("found", 0)
+            deleted = r.get("deleted", 0)
+            errors = r.get("errors", [])
+            line = f"- {entity_type}: {deleted}/{found} deleted"
+            if errors:
+                line += f" ({len(errors)} error(s))"
+            lines.append(line)
+        return "\n".join(lines)
+    except RuntimeError as e:
+        return f"Error: {e}"
+
+
+@mcp.tool()
 async def add_event_to_action(
     ctx: Context,
     mappings: list[dict[str, Any]],

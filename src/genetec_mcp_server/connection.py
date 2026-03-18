@@ -446,6 +446,18 @@ class GenetecConnection:
 
         return self._post("/api/event-to-actions", {"mappings": mappings})
 
+    def cleanup_demo(self) -> dict[str, Any]:
+        """Delete all demo entities (cardholders, doors, alarms, access rules, etc.)
+        while preserving enrolled Cloudlink units.
+
+        Returns:
+            Response dict with 'results' (per-type counts) and 'totalDeleted'.
+
+        Raises:
+            RuntimeError: If the SDK service returns an error.
+        """
+        return self._delete("/api/cleanup/demo")
+
     def disconnect(self) -> None:
         """No-op; the SDK service manages its own connection."""
 
@@ -456,6 +468,16 @@ class GenetecConnection:
     def _get(self, path: str) -> dict[str, Any]:
         """Make a GET request and return the data field."""
         resp = self._client.get(path)
+        resp.raise_for_status()
+        body = resp.json()
+        if not body.get("success"):
+            error = body.get("error", "Unknown error from SDK service.")
+            raise RuntimeError(error)
+        return body.get("data", {})
+
+    def _delete(self, path: str) -> dict[str, Any]:
+        """Make a DELETE request and return the data field."""
+        resp = self._client.delete(path, timeout=300.0)
         resp.raise_for_status()
         body = resp.json()
         if not body.get("success"):

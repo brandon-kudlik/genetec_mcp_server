@@ -275,3 +275,19 @@ public class BatchCreateAccessRulesResponse
     public List<AccessRuleResult> Results { get; set; } = new();
     public int CreatedCount { get; set; }
 }
+
+// Cleanup models
+
+public class CleanupEntityTypeResult
+{
+    public string EntityType { get; set; } = string.Empty;
+    public int Found { get; set; }
+    public int Deleted { get; set; }
+    public List<string> Errors { get; set; } = new();
+}
+
+public class CleanupDemoResponse
+{
+    public List<CleanupEntityTypeResult> Results { get; set; } = new();
+    public int TotalDeleted { get; set; }
+}

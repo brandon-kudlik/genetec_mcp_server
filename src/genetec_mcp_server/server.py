@@ -2,39 +2,127 @@
 
 from __future__ import annotations
 
+import os
+import time
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Optional, Sequence
 
 from mcp.server.fastmcp import Context, FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
-from genetec_mcp_server.config import HOST, PORT
+from genetec_mcp_server.config import HOST, LOG_DIR, PORT
 from genetec_mcp_server.connection import GenetecConnection
+from genetec_mcp_server.tool_logger import ToolCallLogger, ToolCallRecord, sanitize_args
 
 
 @dataclass
 class AppContext:
-    """Lifespan context holding the Genetec connection."""
+    """Lifespan context holding the Genetec connection and tool logger."""
 
     connection: GenetecConnection
+    tool_logger: ToolCallLogger
 
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-    """Manage GenetecConnection lifecycle.
-
-    Connects to Security Center on startup and disposes on shutdown.
-    """
+    """Manage GenetecConnection and ToolCallLogger lifecycle."""
     conn = GenetecConnection()
     conn.connect()
+    logger = ToolCallLogger(Path(LOG_DIR))
     try:
-        yield AppContext(connection=conn)
+        yield AppContext(connection=conn, tool_logger=logger)
     finally:
         conn.dispose()
+        logger.close()
 
 
-mcp = FastMCP("Genetec Security Center", host=HOST, port=PORT, lifespan=app_lifespan)
+class LoggingFastMCP(FastMCP):
+    """FastMCP subclass that logs every tool call to JSONL files."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Maps id(session) -> short 8-char hex session UID
+        self._session_uids: dict[int, str] = {}
+
+    def _get_session_uid(self, session: Any) -> str:
+        key = id(session)
+        if key not in self._session_uids:
+            self._session_uids[key] = uuid.uuid4().hex[:8]
+        return self._session_uids[key]
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any]
+    ) -> Sequence[Any] | dict[str, Any]:
+        ctx = self.get_context()
+        session_uid = "unknown"
+        is_new_session = False
+        try:
+            session = ctx.session
+            session_key = id(session)
+            is_new_session = session_key not in self._session_uids
+            session_uid = self._get_session_uid(session)
+        except Exception:
+            pass
+
+        start = time.monotonic()
+        result = None
+        error = None
+        try:
+            result = await super().call_tool(name, arguments)
+            return result
+        except Exception as exc:
+            error = str(exc)
+            raise
+        finally:
+            duration_ms = (time.monotonic() - start) * 1000
+            timestamp = __import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            ).isoformat()
+            result_str = None
+            if result is not None:
+                raw = str(result)
+                result_str = raw[:500] if len(raw) > 500 else raw
+
+            record = ToolCallRecord(
+                session_id=session_uid,
+                tool_name=name,
+                arguments=sanitize_args(arguments),
+                result=result_str,
+                error=error,
+                timestamp=timestamp,
+                duration_ms=round(duration_ms, 2),
+            )
+
+            try:
+                tool_logger = ctx.request_context.lifespan_context.tool_logger
+                tool_logger.log(record)
+            except Exception:
+                pass
+
+            if is_new_session:
+                try:
+                    await ctx.info(f"Session ID: {session_uid}")
+                except Exception:
+                    pass
+
+
+mcp = LoggingFastMCP("Genetec Security Center", host=HOST, port=PORT, lifespan=app_lifespan)
+
+
+@mcp.custom_route("/api/logs/sessions", methods=["GET"])
+async def http_list_sessions(request: Request) -> JSONResponse:
+    """Return active sessions as JSON — useful for curl/browser access."""
+    try:
+        app_state = mcp._lifespan_context  # type: ignore[attr-defined]
+        sessions = app_state.tool_logger.get_sessions()
+    except Exception:
+        sessions = []
+    return JSONResponse(sessions)
 
 
 @mcp.tool()
@@ -756,3 +844,52 @@ async def add_event_to_action(
         return "\n".join(lines)
     except (RuntimeError, ValueError) as e:
         return f"Error: {e}"
+
+
+@mcp.tool()
+async def list_sessions(ctx: Context) -> str:
+    """List active MCP sessions with tool call statistics.
+
+    Returns session IDs, first/last activity timestamps, and call counts.
+    Session data is kept in memory for up to 24 hours and is reloaded from
+    today's log file on server restart.
+
+    Returns:
+        A formatted list of active sessions, or a message if no sessions exist.
+    """
+    tool_logger: ToolCallLogger = ctx.request_context.lifespan_context.tool_logger
+    sessions = tool_logger.get_sessions()
+    if not sessions:
+        return "No active sessions found."
+    lines = [f"Found {len(sessions)} session(s):\n"]
+    for s in sessions:
+        lines.append(
+            f"- {s['session_id']} | calls: {s['call_count']} | "
+            f"first: {s['first_activity']} | last: {s['last_activity']}"
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_session_logs(ctx: Context, session_id: str) -> str:
+    """Get tool call log records for a specific session.
+
+    Args:
+        session_id: The 8-character session UID shown when the session started.
+
+    Returns:
+        A formatted list of tool call records (tool name, args, result, duration).
+    """
+    tool_logger: ToolCallLogger = ctx.request_context.lifespan_context.tool_logger
+    records = tool_logger.get_session_logs(session_id)
+    if not records:
+        return f"No records found for session '{session_id}'."
+    lines = [f"Found {len(records)} record(s) for session '{session_id}':\n"]
+    for r in records:
+        status = f"ERROR: {r.error}" if r.error else (r.result or "")
+        lines.append(
+            f"- [{r.timestamp}] {r.tool_name} ({r.duration_ms}ms)\n"
+            f"  args: {r.arguments}\n"
+            f"  result: {status}"
+        )
+    return "\n".join(lines)

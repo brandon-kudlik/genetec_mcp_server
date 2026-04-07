@@ -28,17 +28,29 @@ class AppContext:
     tool_logger: ToolCallLogger
 
 
+_shared_connection: GenetecConnection | None = None
+_shared_logger: ToolCallLogger | None = None
+
+
+def _get_shared_connection() -> GenetecConnection:
+    global _shared_connection
+    if _shared_connection is None:
+        _shared_connection = GenetecConnection()
+        _shared_connection.connect()
+    return _shared_connection
+
+
+def _get_shared_logger() -> ToolCallLogger:
+    global _shared_logger
+    if _shared_logger is None:
+        _shared_logger = ToolCallLogger(Path(LOG_DIR))
+    return _shared_logger
+
+
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-    """Manage GenetecConnection and ToolCallLogger lifecycle."""
-    conn = GenetecConnection()
-    conn.connect()
-    logger = ToolCallLogger(Path(LOG_DIR))
-    try:
-        yield AppContext(connection=conn, tool_logger=logger)
-    finally:
-        conn.dispose()
-        logger.close()
+    """Provide shared GenetecConnection and ToolCallLogger to each session."""
+    yield AppContext(connection=_get_shared_connection(), tool_logger=_get_shared_logger())
 
 
 class LoggingFastMCP(FastMCP):
@@ -112,6 +124,18 @@ class LoggingFastMCP(FastMCP):
 
 
 mcp = LoggingFastMCP("Genetec Security Center", host=HOST, port=PORT, lifespan=app_lifespan)
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def http_health_check(request: Request) -> JSONResponse:
+    """Lightweight health check for ALB — does not create an MCP session."""
+    conn = _get_shared_connection()
+    try:
+        connected = conn.is_connected
+    except Exception:
+        connected = False
+    status_code = 200 if connected else 503
+    return JSONResponse({"status": "ok" if connected else "unhealthy"}, status_code=status_code)
 
 
 @mcp.custom_route("/api/logs/sessions", methods=["GET"])

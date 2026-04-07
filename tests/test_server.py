@@ -1308,8 +1308,9 @@ class TestLifespan:
     """Tests for the server lifespan (connection lifecycle)."""
 
     @pytest.mark.asyncio
-    async def test_lifespan_connects_and_disposes(self):
-        """Lifespan should connect on startup and dispose on shutdown."""
+    async def test_lifespan_provides_shared_connection(self):
+        """Lifespan should provide the shared connection without disposing on exit."""
+        import genetec_mcp_server.server as srv
         from genetec_mcp_server.server import app_lifespan
 
         mock_server = MagicMock()
@@ -1318,12 +1319,18 @@ class TestLifespan:
             mock_instance = MagicMock()
             mock_instance.connect.return_value = "Success"
             MockConn.return_value = mock_instance
+            # Reset shared state so the mock is picked up
+            srv._shared_connection = None
 
             async with app_lifespan(mock_server) as context:
                 assert context.connection is mock_instance
                 mock_instance.connect.assert_called_once()
 
-            mock_instance.dispose.assert_called_once()
+            # Shared connection is NOT disposed per-session
+            mock_instance.dispose.assert_not_called()
+
+        # Clean up shared state for other tests
+        srv._shared_connection = None
 
 
 class TestQueryAccessRulesTool:
